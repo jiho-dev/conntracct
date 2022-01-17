@@ -7,25 +7,24 @@ package kernel
 // this map needs to be updated with the version it's introduced in.
 var Builds = map[string]Kernel{
 	// use vanilla kernel instead of CentOS 8.3 kernel
-	// because of compile error
-	"4.18.0": {
-		Version: "4.18.0",
-		URL:     "https://cdn.kernel.org/pub/linux/kernel/v4.x/linux-4.18.1.tar.xz",
-		Params:  params["MarkNFTNat"],
-		Probes:  kprobes["acct_v1"],
-	},
+	// if compile error
+	/*
+		"4.18.0": {
+			Version: "4.18.0",
+			URL:     "https://cdn.kernel.org/pub/linux/kernel/v4.x/linux-4.18.1.tar.xz",
+			Probes:  kprobes["acct_v1"],
+			Params:  params["MarkNFTNat"],
+		},
+	*/
 
 	//////////////////////////
 	// from CentOS kernel
-	/*
-		// compile error
-		"4.18.0": {
-			Version: "4.18.0",
-			URL:        "file://pkg/kernel/source/linux-4.18.0-348.7.1.el8_5.tar.xz",
-			ConfigFile: "/pkg/kernel/source/config-4.18.0-348.7.1.el8_5.x86_64",
-			Probes:     kprobes["acct_v1"],
-		},
-	*/
+	"4.18.0": {
+		Version:    "4.18.0",
+		URL:        "file://pkg/kernel/source/linux-4.18.0-348.7.1.el8_5.tar.xz",
+		ConfigFile: "/pkg/kernel/source/config-4.18.0-348.7.1.el8_5.x86_64",
+		Probes:     kprobes["acct_v1"],
+	},
 
 	"3.10.0": {
 		Version:    "3.10.0",

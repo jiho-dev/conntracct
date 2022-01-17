@@ -25,8 +25,9 @@ require (
 	github.com/spf13/viper v1.3.2
 	github.com/stretchr/testify v1.2.2
 	github.com/ti-mo/kconfig v0.0.0-20181208153747-0708bf82969f
+	github.com/tklauser/go-sysconf v0.3.9
 	github.com/vishvananda/netns v0.0.0-20191106174202-0a2b9b5464df
 	golang.org/x/sync v0.0.0-20190227155943-e225da77a7e6
-	golang.org/x/sys v0.0.0-20200124204421-9fbb57f87de9
+	golang.org/x/sys v0.0.0-20210816074244-15123e1e1f71
 	lukechampine.com/blake3 v0.4.0
 )

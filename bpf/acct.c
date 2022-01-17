@@ -1,10 +1,8 @@
 #include <linux/kconfig.h>
 #include "bpf_helpers.h"
 
-#ifdef LINUX_3_10
- #define KBUILD_MODNAME "conntracct"
-#endif
-#define _LINUX_BLKDEV_H // calls macros that contain inline asm, which BPF doesn't support
+#define KBUILD_MODNAME "conntracct"
+//#define _LINUX_BLKDEV_H // calls macros that contain inline asm, which BPF doesn't support
 #include <net/netfilter/nf_conntrack.h>
 #include <net/netfilter/nf_conntrack_acct.h>
 #include <net/netfilter/nf_conntrack_timestamp.h>
@@ -15,6 +13,7 @@ struct acct_event_t {
   u64 cptr;
   union nf_inet_addr srcaddr;
   union nf_inet_addr dstaddr;
+  union nf_inet_addr nataddr;
   u64 packets_orig;
   u64 bytes_orig;
   u64 packets_ret;
@@ -23,7 +22,10 @@ struct acct_event_t {
   u32 netns;
   u16 srcport;
   u16 dstport;
+  u16 natport;
+  u16 zone;
   u8 proto;
+  u8 dummy[7];
 };
 
 enum o_config {
@@ -41,7 +43,7 @@ enum o_config_ratecurve {
   ConfigCurveMax,
 };
 
-#ifdef LINUX_3_10
+#ifdef _LINUX_3_10
 // Compatibility: Linux-3.10.0 from CentOS 7.3
 struct nf_conn_acct {
     struct nf_conn_counter counter[IP_CT_DIR_MAX];
@@ -119,10 +121,34 @@ static __always_inline bool probe_ready() {
   return (rp && *rp == ready_val);
 }
 
+static __always_inline int get_ns_ext(void **ext_data, int type, struct nf_conn *ct) {
+
+  // Check if accounting extension is enabled and initialized
+  // for this connection. Important because the acct codepath
+  // is called for unix socket usage as well. Also, the acct
+  // extension memory is uninitialized if the acct sysctl is disabled.
+  struct nf_ct_ext *ct_ext;
+  bpf_probe_read(&ct_ext, sizeof(ct_ext), &ct->ext);
+  if (!ct_ext)
+    return -1;
+
+  u8 ct_acct_offset;
+  bpf_probe_read(&ct_acct_offset, sizeof(ct_acct_offset), &ct_ext->offset[type]);
+  if (!ct_acct_offset)
+    return -1;
+
+  *ext_data = ((void *)ct_ext + ct_acct_offset);
+  if (!*ext_data)
+    return -1;
+
+  return 0;
+}
+
 // get_acct_ext gets a reference to the nf_conn's accounting extension.
 // Returns non-zero on error.
 static __always_inline int get_acct_ext(struct nf_conn_acct **acct_ext, struct nf_conn *ct) {
 
+  /*
   // Check if accounting extension is enabled and initialized
   // for this connection. Important because the acct codepath
   // is called for unix socket usage as well. Also, the acct
@@ -143,12 +169,20 @@ static __always_inline int get_acct_ext(struct nf_conn_acct **acct_ext, struct n
     return -1;
 
   return 0;
+  */
+
+  if (get_ns_ext((void**)acct_ext, NF_CT_EXT_ACCT, ct)) {
+      return -1;
+  }
+
+  return 0;
 }
 
 // get_ts_ext gets a reference to the nf_conn's timestamp extension.
 // Returns non-zero on error.
 static __always_inline int get_ts_ext(struct nf_conn_tstamp **ts_ext, struct nf_conn *ct) {
 
+  /*
   struct nf_ct_ext *ct_ext;
   bpf_probe_read(&ct_ext, sizeof(ct_ext), &ct->ext);
   if (!ct_ext)
@@ -164,6 +198,13 @@ static __always_inline int get_ts_ext(struct nf_conn_tstamp **ts_ext, struct nf_
     return -1;
 
   return 0;
+  */
+
+  if (get_ns_ext((void**)ts_ext, NF_CT_EXT_TSTAMP, ct)) {
+      return -1;
+  }
+
+  return 0;
 }
 
 
@@ -176,6 +217,46 @@ static __always_inline u32 flow_status(struct nf_conn *ct) {
   bpf_probe_read(&status, sizeof(status), &ct->status);
   return status;
 }
+
+#ifdef _LINUX_3_10
+static __always_inline int get_zone(struct acct_event_t *data, struct nf_conn *ct) {
+
+  /*
+  struct nf_ct_ext *ct_ext;
+  bpf_probe_read(&ct_ext, sizeof(ct_ext), &ct->ext);
+  if (!ct_ext)
+    return -1;
+
+  u8 ct_zone_offset;
+  bpf_probe_read(&ct_zone_offset, sizeof(ct_zone_offset), &ct_ext->offset[NF_CT_EXT_ZONE]);
+  if (!ct_zone_offset)
+    return -1;
+
+  struct nf_conntrack_zone *zone_ext;
+  zone_ext = ((void *)ct_ext + ct_zone_offset);
+  if (!zone_ext)
+    return -1;
+  */
+
+  struct nf_conntrack_zone *zone_ext;
+  if (get_ns_ext((void**)&zone_ext, NF_CT_EXT_ZONE, ct)) {
+      return -1;
+  }
+
+  bpf_probe_read(&data->zone, sizeof(data->zone), &zone_ext->id);
+  return 0;
+}
+#else
+
+static __always_inline int get_zone(struct acct_event_t *data, struct nf_conn *ct) {
+  struct nf_conntrack_zone *zone;
+  bpf_probe_read(&zone, sizeof(zone), &ct->zone);
+  if (zone) {
+    bpf_probe_read(&data->zone, sizeof(zone->id), &ct->zone.id);
+  }
+  return 0;
+}
+#endif
 
 // extract_counters extracts accounting info from an nf_conn into acct_event_t.
 // Returns 0 if acct extension was present in ct.
@@ -221,9 +302,11 @@ static __always_inline void extract_tuple(struct acct_event_t *data, struct nf_c
 
   data->srcaddr = tuplehash[IP_CT_DIR_ORIGINAL].tuple.src.u3;
   data->dstaddr = tuplehash[IP_CT_DIR_ORIGINAL].tuple.dst.u3;
+  data->nataddr = tuplehash[IP_CT_DIR_REPLY].tuple.dst.u3;
 
   data->srcport = tuplehash[IP_CT_DIR_ORIGINAL].tuple.src.u.all;
   data->dstport = tuplehash[IP_CT_DIR_ORIGINAL].tuple.dst.u.all;
+  data->natport = tuplehash[IP_CT_DIR_REPLY].tuple.dst.u.all;
 }
 
 // extract_netns extracts the nf_conn's network namespace inode number into an acct_event_t.
@@ -238,7 +321,7 @@ static __always_inline void extract_netns(struct acct_event_t *data, struct nf_c
 
   if (net) {
     // netns field will remain zero if probe read fails.
-#ifdef LINUX_3_10
+#ifdef _LINUX_3_10
     bpf_probe_read(&data->netns, sizeof(data->netns), &net->proc_inum);
 #else
     bpf_probe_read(&data->netns, sizeof(data->netns), &net->ns.inum);
@@ -426,6 +509,8 @@ static __always_inline u64 flow_sample_update(struct nf_conn *ct, u64 ts, struct
   // Extract conntrack connection mark.
   bpf_probe_read(&data.connmark, sizeof(data.connmark), &ct->mark);
 
+  get_zone(&data, ct);
+
   // Submit event to userspace.
   bpf_perf_event_output(ctx, &perf_acct_update, BPF_F_CURRENT_CPU, &data, sizeof(data));
 
@@ -453,6 +538,7 @@ static __always_inline u64 flow_sample_destroy(struct nf_conn *ct, u64 ts, struc
   extract_netns(&data, ct);
   extract_tstamp(&data, ct);
   bpf_probe_read(&data.connmark, sizeof(data.connmark), &ct->mark);
+  get_zone(&data, ct);
 
   bpf_perf_event_output(ctx, &perf_acct_end, BPF_F_CURRENT_CPU, &data, sizeof(data));
 

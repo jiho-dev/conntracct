@@ -53,8 +53,10 @@ func (Bpf) Clean() error {
 // Build builds all BPF programs against all defined kernels.
 func (Bpf) Build() error {
 
-	// Download and extract all kernels first.
-	mg.Deps(Bpf.Kernels)
+	/*
+		// Download and extract all kernels first.
+		mg.Deps(Bpf.Kernels)
+	*/
 
 	// Basic check for build dependencies to avoid ugly errors.
 	buildTools := []string{"clang", "llc", "statik"}
@@ -159,13 +161,13 @@ func buildProbe(srcFile, dstObj string, k kernel.Kernel) error {
 		"-S",
 		"-c", srcFile,
 		"-o", "-",
+		"-Wno-error=uninitialized",
 	}
 
 	if k.IsLinux3() {
 		// for linux-3.10.0 from CentOS 7.3
 		clangParams = append(clangParams,
-			"-DLINUX_3_10",
-			"-Wno-error=uninitialized",
+			"-D_LINUX_3_10",
 			"-Wno-error=unused-function",
 			"-Wno-error=frame-address",
 		)

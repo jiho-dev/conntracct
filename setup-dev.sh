@@ -5,6 +5,14 @@ set -x
 sudo ip6tables -t filter -A OUTPUT -m conntrack --ctstate related,established -j ACCEPT
 sudo iptables -t filter -A OUTPUT -m conntrack --ctstate related,established -j ACCEPT
 
+# outbound NAT
+nic="eth0"
+msq=$(sudo iptables -L -t nat -v | grep MASQUERADE | grep $nic)
+if [ "$msq" == "" ]; then
+	sudo iptables -t nat -A POSTROUTING -o $nic -j MASQUERADE
+fi
+
+
 sudo sysctl net/netfilter/nf_conntrack_tcp_timeout_close_wait=15
 sudo sysctl net/netfilter/nf_conntrack_tcp_timeout_fin_wait=15
 sudo sysctl net/netfilter/nf_conntrack_tcp_timeout_time_wait=15

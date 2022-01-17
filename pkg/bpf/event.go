@@ -3,8 +3,12 @@ package bpf
 import (
 	"encoding/binary"
 	"fmt"
+	"io/ioutil"
 	"net"
+	"strconv"
+	"strings"
 	"sync"
+	"time"
 	"unsafe"
 
 	"lukechampine.com/blake3"
@@ -18,7 +22,8 @@ var hashPool = sync.Pool{
 }
 
 // EventLength is the length of the struct sent by BPF.
-const EventLength = 104
+// power of 8
+const EventLength = 128
 
 // Event is an accounting event delivered to userspace from the Probe.
 type Event struct {
@@ -28,13 +33,16 @@ type Event struct {
 	Connmark    uint32 `json:"connmark"`
 	SrcAddr     net.IP `json:"src_addr"`
 	DstAddr     net.IP `json:"dst_addr"`
+	NatAddr     net.IP `json:"nat_addr"`
 	PacketsOrig uint64 `json:"packets_orig"`
 	BytesOrig   uint64 `json:"bytes_orig"`
 	PacketsRet  uint64 `json:"packets_ret"`
 	BytesRet    uint64 `json:"bytes_ret"`
 	SrcPort     uint16 `json:"src_port"`
 	DstPort     uint16 `json:"dst_port"`
+	NatPort     uint16 `json:"nat_port"`
 	NetNS       uint32 `json:"netns"`
+	Zone        uint16 `json:"zone"`
 	Proto       uint8  `json:"proto"`
 
 	connPtr uint64
@@ -68,20 +76,29 @@ func (e *Event) unmarshalBinary(b []byte) error {
 		e.DstAddr = net.IP(b[40:56])
 	}
 
-	e.PacketsOrig = *(*uint64)(unsafe.Pointer(&b[56]))
-	e.BytesOrig = *(*uint64)(unsafe.Pointer(&b[64]))
-	e.PacketsRet = *(*uint64)(unsafe.Pointer(&b[72]))
-	e.BytesRet = *(*uint64)(unsafe.Pointer(&b[80]))
+	if isIPv4(b[56:72]) {
+		e.NatAddr = net.IPv4(b[56], b[57], b[58], b[59])
+	} else {
+		e.NatAddr = net.IP(b[56:72])
+	}
 
-	e.Connmark = *(*uint32)(unsafe.Pointer(&b[88]))
-	e.NetNS = *(*uint32)(unsafe.Pointer(&b[92]))
+	e.PacketsOrig = *(*uint64)(unsafe.Pointer(&b[72]))
+	e.BytesOrig = *(*uint64)(unsafe.Pointer(&b[80]))
+	e.PacketsRet = *(*uint64)(unsafe.Pointer(&b[88]))
+	e.BytesRet = *(*uint64)(unsafe.Pointer(&b[96]))
+
+	e.Connmark = *(*uint32)(unsafe.Pointer(&b[104]))
+	e.NetNS = *(*uint32)(unsafe.Pointer(&b[108]))
 
 	// Only extract ports for UDP and TCP.
-	e.Proto = b[100]
+	e.Proto = b[120]
 	if e.Proto == 6 || e.Proto == 17 {
-		e.SrcPort = binary.BigEndian.Uint16(b[96:98])
-		e.DstPort = binary.BigEndian.Uint16(b[98:100])
+		e.SrcPort = binary.BigEndian.Uint16(b[112:114])
+		e.DstPort = binary.BigEndian.Uint16(b[114:116])
+		e.NatPort = binary.BigEndian.Uint16(b[116:118])
 	}
+	//e.Zone = binary.BigEndian.Uint16(b[118:120])
+	e.Zone = *(*uint16)(unsafe.Pointer(&b[118]))
 
 	// Generate and set the Event's FlowID.
 	e.FlowID = e.hashFlow()
@@ -130,9 +147,50 @@ func (e *Event) hashFlow() uint32 {
 	return out
 }
 
+func systemStart() int64 {
+	str, err := ioutil.ReadFile("/proc/stat")
+	if err != nil {
+		return 0
+	}
+
+	lines := strings.Split(string(str), "\n")
+	for _, line := range lines {
+		if strings.HasPrefix(line, "btime") {
+			parts := strings.Split(line, " ")
+			// format is btime 1388417200
+			val, err := strconv.ParseInt(parts[1], 10, 32)
+			if err != nil {
+				return 0
+			}
+
+			return int64(val)
+		}
+	}
+
+	return 0
+}
+
+var btime int64 = systemStart()
+
+/*
+func jiffiesToTime(jiffies int64) time.Time {
+	ticks, _ := sysconf.Sysconf(sysconf.SC_CLK_TCK)
+	return time.Unix(btime+(jiffies/int64(ticks)), 0)
+}
+
+func jiffiesToDuration(jiffies int64) time.Duration {
+	ticks, _ := sysconf.Sysconf(sysconf.SC_CLK_TCK)
+	return time.Duration(jiffies / int64(ticks))
+}
+*/
+
 // String returns a readable string representation of the Event.
 func (e *Event) String() string {
-	return fmt.Sprintf("%+v", *e)
+	s := time.Unix(0, int64(e.Start))
+	ts := time.Unix(btime, 0)
+	ts = ts.Add(time.Duration(e.Timestamp))
+
+	return fmt.Sprintf("%s(%s): %+v", s, ts, *e)
 }
 
 // isIPv4 checks if everything but the first 4 bytes of a bytearray

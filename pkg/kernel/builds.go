@@ -6,55 +6,32 @@ package kernel
 // Whenever a breaking change is made to any of the structures the bpf program references,
 // this map needs to be updated with the version it's introduced in.
 var Builds = map[string]Kernel{
-	// 4.9 used by Debian Stretch.
-	"4.9.0": {
-		Version: "4.9.0",
-		URL:     "https://cdn.kernel.org/pub/linux/kernel/v4.x/linux-4.9.tar.xz",
+	// use vanilla kernel instead of CentOS 8.3 kernel
+	// because of compile error
+	"4.18.0": {
+		Version: "4.18.0",
+		URL:     "https://cdn.kernel.org/pub/linux/kernel/v4.x/linux-4.18.1.tar.xz",
 		Params:  params["MarkNFTNat"],
 		Probes:  kprobes["acct_v1"],
 	},
-	// `nat_bysource` in struct nf_conn was changed from a struct rhlist_head
-	// to a struct hlist_node.
-	"4.9.63": {
-		Version: "4.9.63",
-		URL:     "https://cdn.kernel.org/pub/linux/kernel/v4.x/linux-4.9.63.tar.xz",
-		Params:  params["MarkNFTNat"],
-		Probes:  kprobes["acct_v1"],
-	},
-	// 4.14.0 adds a `struct netns_can` to `struct net`.
-	"4.13.0": {
-		Version: "4.13.16",
-		URL:     "https://cdn.kernel.org/pub/linux/kernel/v4.x/linux-4.13.16.tar.xz",
-		Params:  params["MarkNFTNat"],
-		Probes:  kprobes["acct_v1"],
-	},
-	// 4.14 adds a `struct list_head` in `struct net`.
-	"4.14.0": {
-		Version: "4.14.177",
-		URL:     "https://cdn.kernel.org/pub/linux/kernel/v4.x/linux-4.14.177.tar.xz",
-		Params:  params["MarkNFTNat"],
-		Probes:  kprobes["acct_v1"],
-	},
-	// 4.17 saw a breaking change in netns struct layout. Not a long-term kernel.
-	"4.17.0": {
-		Version: "4.17.9",
-		URL:     "https://cdn.kernel.org/pub/linux/kernel/v4.x/linux-4.17.9.tar.xz",
-		Params:  params["MarkNFTNat"],
-		Probes:  kprobes["acct_v1"],
-	},
-	// In 5.3, `u16 cpu` and `u32 timeout` got swapped in struct nf_conn.
-	"5.3.0": {
-		Version: "5.3.14",
-		URL:     "https://cdn.kernel.org/pub/linux/kernel/v5.x/linux-5.3.14.tar.xz",
-		Params:  params["MarkNFTNat"],
-		Probes:  kprobes["acct_v1"],
-	},
-	// In 5.5.0, `struct rcu_head rcu` was removed from `struct nf_ct_ext`.
-	"5.5.0": {
-		Version: "5.5.10",
-		URL:     "https://cdn.kernel.org/pub/linux/kernel/v5.x/linux-5.5.10.tar.xz",
-		Params:  params["MarkNFTNat"],
-		Probes:  kprobes["acct_v1"],
+
+	//////////////////////////
+	// from CentOS kernel
+	/*
+		// compile error
+		"4.18.0": {
+			Version: "4.18.0",
+			URL:        "file://pkg/kernel/source/linux-4.18.0-348.7.1.el8_5.tar.xz",
+			ConfigFile: "/pkg/kernel/source/config-4.18.0-348.7.1.el8_5.x86_64",
+			Probes:     kprobes["acct_v1"],
+		},
+	*/
+
+	"3.10.0": {
+		Version:    "3.10.0",
+		URL:        "file://pkg/kernel/source/linux-3.10.0-1127.el7.tar.xz",
+		ConfigFile: "/pkg/kernel/source/config-3.10.0-1127.el7.x86_64",
+		Probes:     kprobes["acct_v1"],
 	},
 }
 

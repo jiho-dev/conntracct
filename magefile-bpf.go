@@ -1,3 +1,4 @@
+//go:build mage
 // +build mage
 
 package main
@@ -92,7 +93,7 @@ func (Bpf) Build() error {
 			continue
 		}
 
-		if err := buildProbe(bpfAcctProbe, bpfObjectPath, k.Directory()); err != nil {
+		if err := buildProbe(bpfAcctProbe, bpfObjectPath, k); err != nil {
 			fmt.Println("Failed to build probe against kernel", k.Version)
 			return err
 		}
@@ -120,7 +121,6 @@ func (Bpf) Kernels() error {
 
 		// https://golang.org/doc/faq#closures_and_goroutines
 		k := k
-
 		eg.Go(func() error {
 			// Get and unarchive the kernel.
 			if err := k.Fetch(); err != nil {
@@ -145,7 +145,7 @@ func (Bpf) Kernels() error {
 
 // buildProbe builds a BPF program given its source file, destination object file
 // and directory of the kernel source tree the program is to be built against.
-func buildProbe(srcFile, dstObj, kernelDir string) error {
+func buildProbe(srcFile, dstObj string, k kernel.Kernel) error {
 
 	clangParams := []string{
 		"-D__KERNEL__", "-D__BPF_TRACING__",
@@ -161,6 +161,16 @@ func buildProbe(srcFile, dstObj, kernelDir string) error {
 		"-o", "-",
 	}
 
+	if k.IsLinux3() {
+		// for linux-3.10.0 from CentOS 7.3
+		clangParams = append(clangParams,
+			"-DLINUX_3_10",
+			"-Wno-error=uninitialized",
+			"-Wno-error=unused-function",
+			"-Wno-error=frame-address",
+		)
+	}
+
 	// Specify all include dirs to prevent clang from falling back to includes
 	// on the machine in /usr/include during cross-compilation.
 	kdirs := []string{
@@ -174,7 +184,7 @@ func buildProbe(srcFile, dstObj, kernelDir string) error {
 
 	// Resolve kernel directories in all include paths and append to clang params.
 	for _, d := range kdirs {
-		clangParams = append(clangParams, fmt.Sprintf(d, kernelDir))
+		clangParams = append(clangParams, fmt.Sprintf(d, k.Directory()))
 	}
 
 	llcParams := []string{

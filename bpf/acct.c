@@ -1,6 +1,9 @@
 #include <linux/kconfig.h>
 #include "bpf_helpers.h"
 
+#ifdef LINUX_3_10
+ #define KBUILD_MODNAME "conntracct"
+#endif
 #define _LINUX_BLKDEV_H // calls macros that contain inline asm, which BPF doesn't support
 #include <net/netfilter/nf_conntrack.h>
 #include <net/netfilter/nf_conntrack_acct.h>
@@ -37,6 +40,13 @@ enum o_config_ratecurve {
   ConfigCurve2Interval,
   ConfigCurveMax,
 };
+
+#ifdef LINUX_3_10
+// Compatibility: Linux-3.10.0 from CentOS 7.3
+struct nf_conn_acct {
+    struct nf_conn_counter counter[IP_CT_DIR_MAX];
+};
+#endif
 
 // Magic value that userspace writes into the ConfigReady location when
 // configuration from userspace has completed.
@@ -228,7 +238,11 @@ static __always_inline void extract_netns(struct acct_event_t *data, struct nf_c
 
   if (net) {
     // netns field will remain zero if probe read fails.
+#ifdef LINUX_3_10
+    bpf_probe_read(&data->netns, sizeof(data->netns), &net->proc_inum);
+#else
     bpf_probe_read(&data->netns, sizeof(data->netns), &net->ns.inum);
+#endif
   }
 }
 

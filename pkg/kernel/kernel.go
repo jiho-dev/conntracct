@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"path"
 	"strings"
@@ -46,10 +47,11 @@ type Probes []Probe
 
 // Kernel represents a kernel object.
 type Kernel struct {
-	Version string
-	URL     string
-	Params  Params
-	Probes  Probes
+	Version    string
+	URL        string
+	ConfigFile string
+	Params     Params
+	Probes     Probes
 }
 
 // ArchiveName returns the file name of the archive based on its URL.
@@ -72,6 +74,10 @@ func (k Kernel) Directory() string {
 	return path.Join(buildDir, k.Name())
 }
 
+func (k Kernel) IsLinux3() bool {
+	return strings.HasPrefix(k.Version, "3.")
+}
+
 // Fetch ensures that a given kernel is downloaded and extracted to the temp directory.
 func (k Kernel) Fetch() error {
 
@@ -83,12 +89,27 @@ func (k Kernel) Fetch() error {
 		return err
 	}
 
-	if err := curl(k.URL, k.ArchivePath()); err != nil {
+	u, err := url.Parse(k.URL)
+	if err != nil {
 		return err
 	}
 
-	if err := unarchive(k.ArchivePath(), buildDir, k.Directory()); err != nil {
-		return err
+	if u.Scheme == "https" || u.Scheme == "http" {
+		if err := curl(k.URL, k.ArchivePath()); err != nil {
+			return err
+		}
+
+		if err := unarchive(k.ArchivePath(), buildDir, k.Directory()); err != nil {
+			return err
+		}
+
+	} else if u.Scheme == "file" {
+		cur, _ := os.Getwd()
+		srcPath := cur + "/" + u.Host + u.Path
+
+		if err := unarchive(srcPath, buildDir, k.Directory()); err != nil {
+			return err
+		}
 	}
 
 	if mg.Verbose() {
@@ -113,11 +134,18 @@ func (k Kernel) Configure(params Params) error {
 
 	kcfile := path.Join(k.Directory(), ".config")
 
-	// Initialize the default configuration to '.config'.
-	// Include the 'clean' target to make sure all generated/prepared headers
-	// from previous runs are erased.
-	if err := runWithQuiet(e, "make", "-C", k.Directory(), "clean", "defconfig"); err != nil {
-		return err
+	if k.ConfigFile == "" {
+		// Initialize the default configuration to '.config'.
+		// Include the 'clean' target to make sure all generated/prepared headers
+		// from previous runs are erased.
+		if err := runWithQuiet(e, "make", "-C", k.Directory(), "clean", "defconfig"); err != nil {
+			return err
+		}
+	} else {
+		cur, _ := os.Getwd()
+		if err := runWithQuiet(e, "cp", "-f", cur+k.ConfigFile, kcfile); err != nil {
+			return err
+		}
 	}
 
 	kc := kconfig.New()
@@ -125,14 +153,20 @@ func (k Kernel) Configure(params Params) error {
 		return err
 	}
 
+	var changed bool
+
 	if params != nil {
 		kc.Merge(params)
-	} else {
+		changed = true
+	} else if k.Params != nil {
 		kc.Merge(k.Params)
+		changed = true
 	}
 
-	if err := kc.Write(kcfile); err != nil {
-		return err
+	if changed {
+		if err := kc.Write(kcfile); err != nil {
+			return err
+		}
 	}
 
 	// Prepare kernel headers.

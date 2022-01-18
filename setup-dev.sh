@@ -18,3 +18,4 @@ sudo sysctl net/netfilter/nf_conntrack_tcp_timeout_fin_wait=15
 sudo sysctl net/netfilter/nf_conntrack_tcp_timeout_time_wait=15
 sudo sysctl net/netfilter/nf_conntrack_udp_timeout=10
 sudo sysctl net/netfilter/nf_conntrack_udp_timeout_stream=30
+sudo sysctl net/netfilter/nf_conntrack_icmp_timeout=10

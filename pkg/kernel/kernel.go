@@ -47,11 +47,12 @@ type Probes []Probe
 
 // Kernel represents a kernel object.
 type Kernel struct {
-	Version    string
-	URL        string
-	ConfigFile string
-	Params     Params
-	Probes     Probes
+	Version     string
+	URL         string
+	ConfigFile  string
+	Params      Params
+	Probes      Probes
+	BuildParams []string
 }
 
 // ArchiveName returns the file name of the archive based on its URL.

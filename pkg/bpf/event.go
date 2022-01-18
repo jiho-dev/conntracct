@@ -44,9 +44,12 @@ type Event struct {
 	NetNS       uint32 `json:"netns"`
 	Zone        uint16 `json:"zone"`
 	Proto       uint8  `json:"proto"`
+	EventType   uint8  `json:"event_type"`
 
 	connPtr uint64
 }
+
+var EventTypeString = []string{"None", "Add", "Update", "Delete"}
 
 // unmarshalBinary unmarshals a slice of bytes received from the
 // kernel's eBPF perf map into a struct using the machine's native endianness.
@@ -99,6 +102,7 @@ func (e *Event) unmarshalBinary(b []byte) error {
 	}
 	//e.Zone = binary.BigEndian.Uint16(b[118:120])
 	e.Zone = *(*uint16)(unsafe.Pointer(&b[118]))
+	e.EventType = b[121]
 
 	// Generate and set the Event's FlowID.
 	e.FlowID = e.hashFlow()
@@ -190,7 +194,7 @@ func (e *Event) String() string {
 	ts := time.Unix(btime, 0)
 	ts = ts.Add(time.Duration(e.Timestamp))
 
-	return fmt.Sprintf("%s(%s): %+v", s, ts, *e)
+	return fmt.Sprintf("%s: %s(%s): %+v", EventTypeString[e.EventType], s, ts, *e)
 }
 
 // isIPv4 checks if everything but the first 4 bytes of a bytearray

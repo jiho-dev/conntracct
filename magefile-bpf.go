@@ -161,16 +161,15 @@ func buildProbe(srcFile, dstObj string, k kernel.Kernel) error {
 		"-S",
 		"-c", srcFile,
 		"-o", "-",
+		// additional options
+		"-Wno-error=unused-function",
+		"-Wno-error=unused-variable",
 		"-Wno-error=uninitialized",
+		"-Wno-error=frame-address",
 	}
 
-	if k.IsLinux3() {
-		// for linux-3.10.0 from CentOS 7.3
-		clangParams = append(clangParams,
-			"-D_LINUX_3_10",
-			"-Wno-error=unused-function",
-			"-Wno-error=frame-address",
-		)
+	if len(k.BuildParams) > 1 {
+		clangParams = append(clangParams, k.BuildParams...)
 	}
 
 	// Specify all include dirs to prevent clang from falling back to includes

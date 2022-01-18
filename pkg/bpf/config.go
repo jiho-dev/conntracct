@@ -40,6 +40,7 @@ type configOffset uint32
 // Enum of indices in the probe's `config` BPF array.
 const (
 	configReady configOffset = iota
+	configCaptureAll
 )
 
 // curveOffset represents an offset in the probe's `curve` BPF array.
@@ -102,6 +103,11 @@ func (ap *Probe) configure(cfg Config) error {
 
 	if err := curveMap.Put(curve2Rate, cfg.Curve2.Rate.Nanoseconds()); err != nil {
 		return errors.Wrap(err, "Curve2Rate in config_ratecurve")
+	}
+
+	// XXX: Set capture all traffic
+	if err := configMap.Put(configCaptureAll, int64(1)); err != nil {
+		return errors.Wrap(err, "configCaptureAll in config")
 	}
 
 	// Set the ready bit in the probe's config map to make it start sending traffic.

@@ -15,7 +15,7 @@ func (s *StdOut) outWorker() {
 
 		select {
 		case e = <-s.updates:
-			_, _ = s.writer.WriteString("Update: ")
+			//_, _ = s.writer.WriteString("Update: ")
 		case e = <-s.destroys:
 			_, _ = s.writer.WriteString("Destroy: ")
 		}

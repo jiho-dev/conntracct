@@ -58,6 +58,7 @@ func trimExt(name string) string {
 
 	name = strings.TrimSuffix(name, ".tar.gz")
 	name = strings.TrimSuffix(name, ".tar.xz")
+	name = strings.TrimSuffix(name, ".tar.bz2")
 
 	return name
 }

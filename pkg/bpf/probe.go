@@ -34,16 +34,17 @@ func init() {
 	traceGroupSuffix = fmt.Sprintf("%x", b)
 }
 
-const perfUpdateMap = "perf_acct_update"
-const perfDestroyMap = "perf_acct_end"
+const perfUpdateMap = "perf_conntrack_event"
+
+//const perfDestroyMap = "perf_acct_end"
 
 // Probe is an instance of a BPF probe running in the kernel.
 type Probe struct {
 
 	// cilium/ebpf resources.
-	collection    *ebpf.Collection
-	updateReader  *perf.Reader
-	destroyReader *perf.Reader
+	collection   *ebpf.Collection
+	updateReader *perf.Reader
+	//destroyReader *perf.Reader
 
 	// File descriptors of perf events opened for this probe.
 	perfEventFds []int
@@ -288,15 +289,18 @@ func (ap *Probe) Start() error {
 	}
 	ap.updateReader = r
 
-	r, err = perf.NewReader(ap.collection.Maps[perfDestroyMap], 4096)
-	if err != nil {
-		return errors.Wrap(err, fmt.Sprintf("NewReader for %s", perfDestroyMap))
-	}
-	ap.destroyReader = r
+	/*
+		r, err = perf.NewReader(ap.collection.Maps[perfDestroyMap], 4096)
+		if err != nil {
+			return errors.Wrap(err, fmt.Sprintf("NewReader for %s", perfDestroyMap))
+		}
+		ap.destroyReader = r
+	*/
 
 	// Start event decoder/fanout workers.
 	go ap.updateWorker()
-	go ap.destroyWorker()
+
+	//go ap.destroyWorker()
 
 	ap.started = true
 
@@ -318,9 +322,11 @@ func (ap *Probe) Stop() error {
 		return err
 	}
 
-	if err := ap.destroyReader.Close(); err != nil {
-		return err
-	}
+	/*
+		if err := ap.destroyReader.Close(); err != nil {
+			return err
+		}
+	*/
 
 	close(ap.lost)
 
@@ -384,33 +390,34 @@ func (ap *Probe) updateWorker() {
 // unmarshals the events into Event structures and sends them on all registered
 // consumers' event channels .
 func (ap *Probe) destroyWorker() {
-
-	for {
-		rec, err := ap.destroyReader.Read()
-		if err != nil {
-			// Reader closed, gracefully exit the read loop.
-			if perf.IsClosed(err) {
-				return
+	/*
+		for {
+			rec, err := ap.destroyReader.Read()
+			if err != nil {
+				// Reader closed, gracefully exit the read loop.
+				if perf.IsClosed(err) {
+					return
+				}
+				panic(fmt.Sprint("unexpected error reading from destroyReader:", err))
 			}
-			panic(fmt.Sprint("unexpected error reading from destroyReader:", err))
+
+			// Log the amount of lost samples and skip processing the sample.
+			if rec.LostSamples > 0 {
+				ap.stats.incrPerfEventsDestroyLost(rec.LostSamples)
+				continue
+			}
+
+			ap.stats.incrPerfEventsDestroy()
+
+			var ae Event
+			if err := ae.unmarshalBinary(rec.RawSample); err != nil {
+				panic(err)
+			}
+
+			// Fan out destroy event to all registered consumers.
+			ap.fanoutEvent(ae, false)
 		}
-
-		// Log the amount of lost samples and skip processing the sample.
-		if rec.LostSamples > 0 {
-			ap.stats.incrPerfEventsDestroyLost(rec.LostSamples)
-			continue
-		}
-
-		ap.stats.incrPerfEventsDestroy()
-
-		var ae Event
-		if err := ae.unmarshalBinary(rec.RawSample); err != nil {
-			panic(err)
-		}
-
-		// Fan out destroy event to all registered consumers.
-		ap.fanoutEvent(ae, false)
-	}
+	*/
 }
 
 // fanoutEvent sends the given Event to all registered consumers.

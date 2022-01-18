@@ -54,14 +54,16 @@ func (p *Pipeline) initProbe(pc *config.ProbeConfig) error {
 	p.stats.UpdateSourceStats = au.Stats()
 	log.Debug("Registered Probe consumer " + au.Name())
 
-	ad := bpf.NewConsumer("PipelineAcctDestroy", make(chan bpf.Event, 1024), bpf.ConsumerDestroy)
-	if err := ap.RegisterConsumer(ad); err != nil {
-		return errors.Wrap(err, "registering destroy consumer to probe")
-	}
-	// Store references to the source and its stats.
-	p.acctDestroySource = ad
-	p.stats.DestroySourceStats = ad.Stats()
-	log.Debug("Registered Probe consumer " + ad.Name())
+	/*
+		ad := bpf.NewConsumer("PipelineAcctDestroy", make(chan bpf.Event, 1024), bpf.ConsumerDestroy)
+		if err := ap.RegisterConsumer(ad); err != nil {
+			return errors.Wrap(err, "registering destroy consumer to probe")
+		}
+		// Store references to the source and its stats.
+		p.acctDestroySource = ad
+		p.stats.DestroySourceStats = ad.Stats()
+		log.Debug("Registered Probe consumer " + ad.Name())
+	*/
 
 	// Save the Probe reference to the pipeline.
 	p.acctProbe = ap
@@ -91,7 +93,7 @@ func (p *Pipeline) startAcct() error {
 
 	// Start the conntracct event consumer.
 	go p.acctUpdateWorker()
-	go p.acctDestroyWorker()
+	//go p.acctDestroyWorker()
 
 	// Start the Probe.
 	if err := p.acctProbe.Start(); err != nil {

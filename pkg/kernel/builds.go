@@ -18,19 +18,34 @@ var Builds = map[string]Kernel{
 	*/
 
 	//////////////////////////
-	// from CentOS kernel
+	// CentOS 8.3(8.5) kernel
 	"4.18.0": {
-		Version:    "4.18.0",
-		URL:        "file://pkg/kernel/source/linux-4.18.0-348.7.1.el8_5.tar.xz",
-		ConfigFile: "/pkg/kernel/source/config-4.18.0-348.7.1.el8_5.x86_64",
-		Probes:     kprobes["acct_v1"],
+		Version:     "4.18.0",
+		URL:         "file://pkg/kernel/source/linux-4.18.0-348.7.1.el8_5.tar.xz",
+		ConfigFile:  "/pkg/kernel/source/config-4.18.0-348.7.1.el8_5.x86_64",
+		BuildParams: []string{},
+		Probes:      kprobes["acct_v1"],
 	},
 
+	// CentOS 7.3 kernel
 	"3.10.0": {
 		Version:    "3.10.0",
 		URL:        "file://pkg/kernel/source/linux-3.10.0-1127.el7.tar.xz",
 		ConfigFile: "/pkg/kernel/source/config-3.10.0-1127.el7.x86_64",
-		Probes:     kprobes["acct_v1"],
+		BuildParams: []string{
+			"-D_LINUX_3_10",
+			"-Wno-error=unused-function",
+		},
+		Probes: kprobes["acct_v1"],
+	},
+
+	// Ubuntu 20.04 LTS
+	"5.4.0": {
+		Version:     "5.4.0",
+		URL:         "file://pkg/kernel/source/linux-source-5.4.0.tar.bz2",
+		ConfigFile:  "/pkg/kernel/source/config-5.4.0-84-generic",
+		BuildParams: []string{},
+		Probes:      kprobes["acct_v1"],
 	},
 }
 

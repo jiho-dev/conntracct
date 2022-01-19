@@ -1,6 +1,7 @@
 #ifndef _ACCT_H_
 #define _ACCT_H_
 
+// 128 bytes
 struct acct_event_t {
     u64 start;
     u64 ts;
@@ -20,7 +21,7 @@ struct acct_event_t {
     u16 zone;
     u8 proto;
     u8 event_type;
-    u8 dummy[6];
+    u8 padding[6];
 };
 
 enum acct_config {

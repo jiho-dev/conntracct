@@ -21,6 +21,9 @@ const int ready_val = 0x90;
 // perf map to send conntrack events to userspace.
 struct bpf_map_def SEC("maps/perf_conntrack_event") perf_conntrack_event = {
     .type = BPF_MAP_TYPE_PERF_EVENT_ARRAY,
+    .key_size = sizeof(int),
+    .value_size = sizeof(u32),
+    //.max_entries = 1024,
 };
 
 // Hash that holds a kernel timestamp per flow indicating when

@@ -4,7 +4,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/ti-mo/conntracct/internal/config"
+	"github.com/ti-mo/conntracct/pkg/config"
 
 	elastic "github.com/olivere/elastic/v7"
 	log "github.com/sirupsen/logrus"

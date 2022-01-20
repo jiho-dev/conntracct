@@ -22,7 +22,7 @@ import (
 const (
 	bpfBuildPath     = "build/bpf/"
 	bpfAcctBuildPath = bpfBuildPath + "acct/"
-	bpfAcctProbe     = "bpf/acct.c"
+	bpfAcctProbe     = "bpf/ct_event_bpf.c"
 )
 
 // Bpf is the namespace for all BPF-related build tasks.

@@ -3,14 +3,13 @@ package sinks
 import (
 	"fmt"
 
-	"github.com/ti-mo/conntracct/pkg/bpf"
-
-	"github.com/ti-mo/conntracct/internal/config"
 	"github.com/ti-mo/conntracct/internal/sinks/dummy"
 	"github.com/ti-mo/conntracct/internal/sinks/elasticsearch"
 	"github.com/ti-mo/conntracct/internal/sinks/influxdb"
 	"github.com/ti-mo/conntracct/internal/sinks/stdout"
 	"github.com/ti-mo/conntracct/internal/sinks/types"
+	"github.com/ti-mo/conntracct/pkg/bpf"
+	"github.com/ti-mo/conntracct/pkg/config"
 )
 
 // An Sink represents a timeseries database or other store

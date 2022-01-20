@@ -6,8 +6,8 @@ import (
 
 	"github.com/ti-mo/conntracct/pkg/bpf"
 
-	"github.com/ti-mo/conntracct/internal/config"
 	"github.com/ti-mo/conntracct/internal/sinks/types"
+	"github.com/ti-mo/conntracct/pkg/config"
 )
 
 // StdOut is an accounting sink writing to standard output/error.

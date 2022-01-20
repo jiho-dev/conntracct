@@ -12,9 +12,9 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/ti-mo/conntracct/internal/apiserver"
-	"github.com/ti-mo/conntracct/internal/config"
 	"github.com/ti-mo/conntracct/internal/pipeline"
 	"github.com/ti-mo/conntracct/internal/pprof"
+	"github.com/ti-mo/conntracct/pkg/config"
 )
 
 // runCmd represents the run command.

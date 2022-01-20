@@ -7,9 +7,9 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 
-	"github.com/ti-mo/conntracct/internal/config"
 	"github.com/ti-mo/conntracct/internal/pipeline"
 	"github.com/ti-mo/conntracct/internal/sinks"
+	"github.com/ti-mo/conntracct/pkg/config"
 )
 
 var (

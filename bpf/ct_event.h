@@ -1,8 +1,8 @@
-#ifndef _ACCT_H_
-#define _ACCT_H_
+#ifndef __CT_EVENT_H__
+#define __CT_EVENT_H__
 
 // 128 bytes
-struct acct_event_t {
+struct ct_event_s {
     u64 start;
     u64 ts;
     u64 cptr;
@@ -24,20 +24,20 @@ struct acct_event_t {
     u8 padding[6];
 };
 
-enum acct_config {
+enum ct_event_config {
     ConfigReady,
     ConfigCaptureAll,
     ConfigMax,
 };
 
-enum acct_event_type {
+enum ct_event_type {
     EventNone,
     EventAdd,
     EventUpdate,
     EventDelete,
 };
 
-enum acct_config_ratecurve {
+enum ct_event_config_ratecurve {
     ConfigCurve0Age,
     ConfigCurve0Interval,
     ConfigCurve1Age,

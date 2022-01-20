@@ -10,8 +10,8 @@ kernel: clean
 	mage bpf:kernels
 
 bin:
-	rm -f ~/src/conntracct/build/bpf/acct/*
-	mage bpf:build
+#	rm -f ~/src/conntracct/build/bpf/acct/*
+#	mage bpf:build
 	mage build
 
 run:

@@ -1,14 +1,14 @@
 #include <linux/kconfig.h>
 #include "bpf_helpers.h"
 
-#define KBUILD_MODNAME "conntracct"
+#define KBUILD_MODNAME "ct_event"
 //#define _LINUX_BLKDEV_H // calls macros that contain inline asm, which BPF doesn't support
 #include <net/netfilter/nf_conntrack.h>
 #include <net/netfilter/nf_conntrack_acct.h>
 #include <net/netfilter/nf_conntrack_timestamp.h>
 #include <net/netfilter/nf_conntrack_labels.h>
 
-#include "acct.h"
+#include "ct_event.h"
 
 char _license[] SEC("license") = "GPL";
 // XXX: be careful to change it
@@ -55,20 +55,20 @@ struct bpf_map_def SEC("maps/currct") currct = {
 };
 
 // Map holding configuration values for this BPF program.
-// Indexed by enum acct_config.
+// Indexed by enum ct_event_config.
 struct bpf_map_def SEC("maps/config") config = {
     .type = BPF_MAP_TYPE_ARRAY,
-    .key_size = sizeof(enum acct_config),
+    .key_size = sizeof(enum ct_event_config),
     .value_size = sizeof(u64),
     .max_entries = ConfigMax,
 };
 
 // Array holding pairs of (age, interval) values,
 // used for age-based rate limiting.
-// Indexed by enum acct_config_ratecurve.
+// Indexed by enum ct_event_config_ratecurve.
 struct bpf_map_def SEC("maps/config_ratecurve") config_ratecurve = {
     .type = BPF_MAP_TYPE_ARRAY,
-    .key_size = sizeof(enum acct_config_ratecurve),
+    .key_size = sizeof(enum ct_event_config_ratecurve),
     .value_size = sizeof(u64),
     .max_entries = ConfigCurveMax,
 };
@@ -123,7 +123,7 @@ static __always_inline u32 flow_status(struct nf_conn *ct) {
     return status;
 }
 
-static __always_inline int extract_zone(struct acct_event_t *data, struct nf_conn *ct) {
+static __always_inline int extract_zone(struct ct_event_s *data, struct nf_conn *ct) {
 #ifdef _LINUX_3_10
     struct nf_conntrack_zone *zone_ext;
     if (get_conn_ext((void**)&zone_ext, NF_CT_EXT_ZONE, ct)) {
@@ -144,9 +144,9 @@ static __always_inline int extract_zone(struct acct_event_t *data, struct nf_con
     return 0;
 }
 
-// extract_counters extracts accounting info from an nf_conn into acct_event_t.
+// extract_counters extracts accounting info from an nf_conn into ct_event_s.
 // Returns 0 if acct extension was present in ct.
-static __always_inline int extract_counters(struct acct_event_t *data, struct nf_conn *ct) {
+static __always_inline int extract_counters(struct ct_event_s *data, struct nf_conn *ct) {
 
     struct nf_conn_acct *acct_ext = 0;
     if (get_conn_ext((void**)&acct_ext, NF_CT_EXT_ACCT, ct)) {
@@ -166,8 +166,8 @@ static __always_inline int extract_counters(struct acct_event_t *data, struct nf
 }
 
 // extract_tstamp extracts the start timestamp of nf_conn_tstamp inside an nf_conn
-// into acct_event_t. Returns 0 if timestamp extension was present in ct.
-static __always_inline int extract_tstamp(struct acct_event_t *data, struct nf_conn *ct) {
+// into ct_event_s. Returns 0 if timestamp extension was present in ct.
+static __always_inline int extract_tstamp(struct ct_event_s *data, struct nf_conn *ct) {
 
     struct nf_conn_tstamp *ts_ext = 0;
     if (get_conn_ext((void**)&ts_ext, NF_CT_EXT_TSTAMP, ct)) {
@@ -180,8 +180,8 @@ static __always_inline int extract_tstamp(struct acct_event_t *data, struct nf_c
 }
 
 // extract_tuple extracts tuple information (proto, src/dest ip and port) of an nf_conn
-// into an acct_event_t.
-static __always_inline void extract_tuple(struct acct_event_t *data, struct nf_conn *ct) {
+// into an ct_event_s.
+static __always_inline void extract_tuple(struct ct_event_s *data, struct nf_conn *ct) {
 
     struct nf_conntrack_tuple_hash tuplehash[IP_CT_DIR_MAX];
     bpf_probe_read(&tuplehash, sizeof(tuplehash), &ct->tuplehash);
@@ -197,8 +197,8 @@ static __always_inline void extract_tuple(struct acct_event_t *data, struct nf_c
     data->natport = tuplehash[IP_CT_DIR_REPLY].tuple.dst.u.all;
 }
 
-// extract_netns extracts the nf_conn's network namespace inode number into an acct_event_t.
-static __always_inline void extract_netns(struct acct_event_t *data, struct nf_conn *ct) {
+// extract_netns extracts the nf_conn's network namespace inode number into an ct_event_s.
+static __always_inline void extract_netns(struct ct_event_s *data, struct nf_conn *ct) {
 
     // Obtain reference to network namespace.
     // Warning: ct_net is a possible_net_t with a single member,
@@ -217,7 +217,7 @@ static __always_inline void extract_netns(struct acct_event_t *data, struct nf_c
     }
 }
 
-static __always_inline void extract_conn_mark(struct acct_event_t *data, struct nf_conn *ct) {
+static __always_inline void extract_conn_mark(struct ct_event_s *data, struct nf_conn *ct) {
     // Extract conntrack connection mark.
     bpf_probe_read(&data->connmark, sizeof(u32), &ct->mark);
 }
@@ -244,7 +244,7 @@ static __always_inline bool enabled_capture_all() {
 
 // curve_get returns an entry from the curve array as a signed 64-bit integer.
 // Returns negative if an entry was not found at the requested index.
-static __always_inline s64 curve_get(enum acct_config_ratecurve curve_enum) {
+static __always_inline s64 curve_get(enum ct_event_config_ratecurve curve_enum) {
 
     int offset = curve_enum;
     u64 *confp = bpf_map_lookup_elem(&config_ratecurve, &offset);
@@ -383,7 +383,7 @@ static __always_inline u64 flow_sample_update(int ev_type, struct nf_conn *ct, u
     }
 
     // Allocate event struct after all checks have succeeded.
-    struct acct_event_t data = {
+    struct ct_event_s data = {
         .event_type = ev_type,
         .start = 0,
         .ts = ts,
@@ -445,7 +445,7 @@ static __always_inline u64 flow_sample_destroy(struct nf_conn *ct, u64 ts, struc
         return 0;
     }
 
-    struct acct_event_t data = {
+    struct ct_event_s data = {
         .event_type = EventDelete,
         .start = 0,
         .ts = ts,

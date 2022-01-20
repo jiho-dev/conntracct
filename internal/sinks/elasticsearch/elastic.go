@@ -9,9 +9,9 @@ import (
 	elastic "github.com/olivere/elastic/v7"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/ti-mo/conntracct/internal/config"
 	"github.com/ti-mo/conntracct/internal/sinks/types"
 	"github.com/ti-mo/conntracct/pkg/bpf"
+	"github.com/ti-mo/conntracct/pkg/config"
 )
 
 // ElasticSink is an accounting sink implementing an elasticsearch client.

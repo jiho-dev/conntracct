@@ -1,6 +1,6 @@
 # github.com/blang/semver v3.5.1+incompatible
 github.com/blang/semver
-# github.com/cilium/ebpf v0.0.0-20200319110858-a7172c01168f => github.com/ti-mo/ebpf v0.0.0-20200331133758-a258b0c67078
+# github.com/cilium/ebpf v0.0.0-20200319110858-a7172c01168f
 github.com/cilium/ebpf
 github.com/cilium/ebpf/asm
 github.com/cilium/ebpf/internal
@@ -98,10 +98,6 @@ github.com/stretchr/testify/assert
 github.com/stretchr/testify/require
 # github.com/ti-mo/kconfig v0.0.0-20181208153747-0708bf82969f
 github.com/ti-mo/kconfig
-# github.com/tklauser/go-sysconf v0.3.9
-github.com/tklauser/go-sysconf
-# github.com/tklauser/numcpus v0.3.0
-github.com/tklauser/numcpus
 # github.com/vishvananda/netns v0.0.0-20191106174202-0a2b9b5464df
 github.com/vishvananda/netns
 # golang.org/x/crypto v0.0.0-20190308221718-c2843e01d9a2

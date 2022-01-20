@@ -7,9 +7,8 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/ti-mo/conntracct/internal/config"
-
 	"github.com/ti-mo/conntracct/pkg/bpf"
+	"github.com/ti-mo/conntracct/pkg/config"
 )
 
 // Init initializes the pipeline. Only runs once, subsequent calls are no-ops.

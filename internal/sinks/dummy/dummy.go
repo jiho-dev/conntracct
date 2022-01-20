@@ -1,10 +1,9 @@
 package dummy
 
 import (
-	"github.com/ti-mo/conntracct/pkg/bpf"
-
-	"github.com/ti-mo/conntracct/internal/config"
 	"github.com/ti-mo/conntracct/internal/sinks/types"
+	"github.com/ti-mo/conntracct/pkg/bpf"
+	"github.com/ti-mo/conntracct/pkg/config"
 )
 
 // Dummy is an accounting sink that does nothing. At all.

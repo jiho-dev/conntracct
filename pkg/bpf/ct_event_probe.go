@@ -4,29 +4,22 @@ import (
 	"bytes"
 	"crypto/rand"
 	"fmt"
-	"io/ioutil"
 	"os"
-	"strconv"
-	"strings"
 	"sync"
 
 	"github.com/cilium/ebpf"
-	//"github.com/cilium/ebpf/perf"
 	"github.com/pkg/errors"
-	"golang.org/x/sys/unix"
-
 	"github.com/ti-mo/conntracct/pkg/kernel"
 	"github.com/ti-mo/conntracct/pkg/perf"
+	"golang.org/x/sys/unix"
 )
 
 var (
-	// Pseudorandom number for generating a 'unique' group name for the
-	// tracing events created for the kernel symbols we want to trace.
-	traceGroupSuffix string
-
-	traceEventsPath = "/sys/kernel/debug/tracing/kprobe_events"
-
-	errInvalidProbeKind = errors.New("only kprobe and kretprobe probes are supported")
+	// `perf_raw_record` contains a trailing `u32 size`, whose length is
+	// included in `perf_event_header.size`, the size of the record's buffer.
+	// When reading raw perf samples from the ring, this many bytes need to be
+	// popped from the end of the data to avoid returning garbage.
+	perfRawRecordTailLength = 4
 )
 
 func init() {
@@ -35,17 +28,13 @@ func init() {
 	traceGroupSuffix = fmt.Sprintf("%x", b)
 }
 
-const perfUpdateMap = "perf_conntrack_event"
-
-//const perfDestroyMap = "perf_acct_end"
+const perfCtEventMap = "perf_conntrack_event"
 
 // Probe is an instance of a BPF probe running in the kernel.
-type Probe struct {
-
+type CtEventProbe struct {
 	// cilium/ebpf resources.
-	collection   *ebpf.Collection
-	updateReader *perf.Reader
-	//destroyReader *perf.Reader
+	collection    *ebpf.Collection
+	ctEventReader *perf.Reader
 
 	// File descriptors of perf events opened for this probe.
 	perfEventFds []int
@@ -53,24 +42,17 @@ type Probe struct {
 	// Target kernel of the loaded probe.
 	kernel kernel.Kernel
 
-	// List of event consumers of the probe.
-	consumerMu sync.RWMutex
-	consumers  []*Consumer
-
 	// Channel for receiving IDs of lost perf events.
 	lost chan uint64
 
 	// Started status of the probe.
 	startMu sync.Mutex
 	started bool
-
-	stats *ProbeStats
 }
 
 // NewProbe instantiates a Probe using the given Config.
 // Loads the BPF program into the kernel but does not attach its kprobes yet.
-func NewProbe(cfg Config) (*Probe, error) {
-
+func NewCtEventProbe(cfg Config) (*CtEventProbe, error) {
 	kr, err := kernelRelease()
 	if err != nil {
 		return nil, err
@@ -83,9 +65,8 @@ func NewProbe(cfg Config) (*Probe, error) {
 	}
 
 	// Instantiate Probe with selected target kernel struct.
-	ap := Probe{
+	ap := CtEventProbe{
 		kernel: k,
-		stats:  &ProbeStats{},
 	}
 
 	// Scan kallsyms before attempting BPF load to avoid arcane error output from eBPF attach.
@@ -105,7 +86,7 @@ func NewProbe(cfg Config) (*Probe, error) {
 	return &ap, nil
 }
 
-func (ap *Probe) load(br *bytes.Reader) error {
+func (ap *CtEventProbe) load(br *bytes.Reader) error {
 
 	spec, err := ebpf.LoadCollectionSpecFromReader(br)
 	if err != nil {
@@ -121,69 +102,8 @@ func (ap *Probe) load(br *bytes.Reader) error {
 	return nil
 }
 
-func probeName(kind, symbol string) string {
-	return kind + "_" + symbol
-}
-
-func probeGroup() string {
-	return "conntracct_" + traceGroupSuffix
-}
-
-func probeEventEntry(group, kind, symbol string) string {
-
-	k := "p"
-	if kind == "kretprobe" {
-		k = "r"
-	}
-	return fmt.Sprintf("%s:%s/%s %s", k, group, probeName(kind, symbol), symbol)
-}
-
-func getTraceEventID(group, name string) (int, error) {
-
-	fname := fmt.Sprintf("/sys/kernel/debug/tracing/events/%s/%s/id", group, name)
-	fb, err := ioutil.ReadFile(fname)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return 0, err
-		}
-		return 0, fmt.Errorf("cannot read kprobe id: %v", err)
-	}
-
-	tid, err := strconv.Atoi(strings.TrimSpace(string(fb)))
-	if err != nil {
-		return 0, fmt.Errorf("invalid kprobe id: %v", err)
-	}
-
-	return tid, nil
-}
-
-func openTraceEvent(group, kind, symbol string) (int, error) {
-
-	if kind != "kprobe" && kind != "kretprobe" {
-		return 0, errInvalidProbeKind
-	}
-
-	f, err := os.OpenFile(traceEventsPath, os.O_APPEND|os.O_WRONLY, 0666)
-	if err != nil {
-		return 0, fmt.Errorf("cannot open %s: %v", traceEventsPath, err)
-	}
-	defer f.Close()
-
-	pe := probeEventEntry(group, kind, symbol)
-	if _, err = f.WriteString(pe); err != nil {
-		return 0, fmt.Errorf("writing %q to kprobe_events: %v", pe, err)
-	}
-
-	tid, err := getTraceEventID(group, probeName(kind, symbol))
-	if err != nil {
-		return 0, fmt.Errorf("getting trace event ID: %s", err)
-	}
-
-	return tid, nil
-}
-
 // closeTraceEvents closes all trace events (kprobe_events) of the Probe.
-func (ap *Probe) closeTraceEvents() error {
+func (ap *CtEventProbe) closeTraceEvents() error {
 
 	f, err := os.OpenFile(traceEventsPath, os.O_APPEND|os.O_WRONLY, 0666)
 	if err != nil {
@@ -203,7 +123,7 @@ func (ap *Probe) closeTraceEvents() error {
 
 // perfEventOpenAttach creates a new perf event on tracepoint tid and binds a
 // BPF program's progFd to it.
-func (ap *Probe) perfEventOpenAttach(tid int, progFd int) error {
+func (ap *CtEventProbe) perfEventOpenAttach(tid int, progFd int) error {
 
 	attrs := &unix.PerfEventAttr{
 		Type:        unix.PERF_TYPE_TRACEPOINT,
@@ -237,7 +157,7 @@ func (ap *Probe) perfEventOpenAttach(tid int, progFd int) error {
 }
 
 // perfEventDisable disables and closes all perf event efds stored in the Probe.
-func (ap *Probe) disablePerfEvents() error {
+func (ap *CtEventProbe) disablePerfEvents() error {
 	for _, efd := range ap.perfEventFds {
 		if err := unix.IoctlSetInt(efd, unix.PERF_EVENT_IOC_DISABLE, 0); err != nil {
 			return fmt.Errorf("disabling perf event: %v", err)
@@ -251,7 +171,7 @@ func (ap *Probe) disablePerfEvents() error {
 }
 
 // Start attaches the BPF program's kprobes and starts polling the perf ring buffer.
-func (ap *Probe) Start() error {
+func (ap *CtEventProbe) Start() error {
 
 	ap.startMu.Lock()
 	defer ap.startMu.Unlock()
@@ -284,24 +204,14 @@ func (ap *Probe) Start() error {
 	ap.lost = make(chan uint64)
 
 	// Set up Readers for reading events from the perf ring buffers.
-	r, err := perf.NewReader(ap.collection.Maps[perfUpdateMap], 4096)
+	r, err := perf.NewReader(ap.collection.Maps[perfCtEventMap], 4096)
 	if err != nil {
-		return errors.Wrap(err, fmt.Sprintf("NewReader for %s", perfUpdateMap))
+		return errors.Wrap(err, fmt.Sprintf("NewReader for %s", perfCtEventMap))
 	}
-	ap.updateReader = r
-
-	/*
-		r, err = perf.NewReader(ap.collection.Maps[perfDestroyMap], 4096)
-		if err != nil {
-			return errors.Wrap(err, fmt.Sprintf("NewReader for %s", perfDestroyMap))
-		}
-		ap.destroyReader = r
-	*/
+	ap.ctEventReader = r
 
 	// Start event decoder/fanout workers.
-	go ap.updateWorker()
-
-	//go ap.destroyWorker()
+	go ap.ctEventWorker()
 
 	ap.started = true
 
@@ -310,8 +220,7 @@ func (ap *Probe) Start() error {
 
 // Stop stops the BPF program and releases all its related resources.
 // Closes all Probe's channels. Can only be called after Start().
-func (ap *Probe) Stop() error {
-
+func (ap *CtEventProbe) Stop() error {
 	ap.startMu.Lock()
 	defer ap.startMu.Unlock()
 
@@ -319,15 +228,11 @@ func (ap *Probe) Stop() error {
 		return errProbeNotStarted
 	}
 
-	if err := ap.updateReader.Close(); err != nil {
-		return err
-	}
-
-	/*
-		if err := ap.destroyReader.Close(); err != nil {
+	if ap.ctEventReader != nil {
+		if err := ap.ctEventReader.Close(); err != nil {
 			return err
 		}
-	*/
+	}
 
 	close(ap.lost)
 
@@ -345,47 +250,43 @@ func (ap *Probe) Stop() error {
 }
 
 // Kernel returns the target kernel structure of the selected probe.
-func (ap *Probe) Kernel() kernel.Kernel {
+func (ap *CtEventProbe) Kernel() kernel.Kernel {
 	return ap.kernel
 }
 
-// Stats returns a snapshot copy of the Probe's statistics.
-func (ap *Probe) Stats() ProbeStats {
-	return ap.stats.Get()
-}
-
-func (ap *Probe) trimTail(data []byte) []byte {
+func (ap *CtEventProbe) trimTail(data []byte) []byte {
 	l := len(data) - perfRawRecordTailLength
 	return data[:l]
 }
 
-// updateWorker reads binady flow update events from the Probe's ring buffer,
+// ctEventWorker reads binady flow update events from the Probe's ring buffer,
 // unmarshals the events into Event structures and sends them on all registered
 // consumers' event channels.
-func (ap *Probe) updateWorker() {
+func (ap *CtEventProbe) ctEventWorker() {
 	var rec perf.Record
 
 	for {
-		//rec, err := ap.updateReader.Read()
-		// XXX
-		err := ap.updateReader.ReadExt(&rec)
+		err := ap.ctEventReader.ReadExt(&rec)
 		if err != nil {
 			// Reader closed, gracefully exit the read loop.
 			if perf.IsClosed(err) {
 				return
 			}
-			panic(fmt.Sprint("unexpected error reading from updateReader:", err))
+
+			fmt.Printf("unexpected error reading from ctEventReader:", err)
+			return
 		}
 
 		// Log the amount of lost samples and skip processing the sample.
 		if rec.LostSamples > 0 {
-			ap.stats.incrPerfEventsUpdateLost(rec.LostSamples)
-			// XXX
-			ap.updateReader.PutTail(rec.Ring)
+			//ap.stats.incrPerfEventsUpdateLost(rec.LostSamples)
+
+			// Done using the buffer
+			ap.ctEventReader.PutTail(rec.Ring)
 			continue
 		}
 
-		ap.stats.incrPerfEventsUpdate()
+		//ap.stats.incrPerfEventsUpdate()
 
 		var ae Event
 		buf := ap.trimTail(rec.RawSample)
@@ -393,73 +294,70 @@ func (ap *Probe) updateWorker() {
 			panic(err)
 		}
 
-		// XXX
-		ap.updateReader.PutTail(rec.Ring)
+		// Done using the buffer
+		ap.ctEventReader.PutTail(rec.Ring)
 
-		// Fan out update event to all registered consumers.
-		ap.fanoutEvent(ae, true)
+		fmt.Printf("%s \n", ae.String())
 	}
 }
 
-// destroyWorker reads binary destroy events from the Probe's ring buffer,
-// unmarshals the events into Event structures and sends them on all registered
-// consumers' event channels .
-func (ap *Probe) destroyWorker() {
-	/*
-		for {
-			rec, err := ap.destroyReader.Read()
-			if err != nil {
-				// Reader closed, gracefully exit the read loop.
-				if perf.IsClosed(err) {
-					return
-				}
-				panic(fmt.Sprint("unexpected error reading from destroyReader:", err))
-			}
+// configure sets configuration values in the probe's config map.
+func (ap *CtEventProbe) configure(cfg Config) error {
 
-			// Log the amount of lost samples and skip processing the sample.
-			if rec.LostSamples > 0 {
-				ap.stats.incrPerfEventsDestroyLost(rec.LostSamples)
-				continue
-			}
-
-			ap.stats.incrPerfEventsDestroy()
-
-			var ae Event
-			if err := ae.unmarshalBinary(rec.RawSample); err != nil {
-				panic(err)
-			}
-
-			// Fan out destroy event to all registered consumers.
-			ap.fanoutEvent(ae, false)
-		}
-	*/
-}
-
-// fanoutEvent sends the given Event to all registered consumers.
-// The update flag specifies whether the event is an update (true) or destroy
-// (false) event.
-func (ap *Probe) fanoutEvent(ae Event, update bool) {
-
-	// Take a read lock on the consumers so we don't send to closed or already
-	// unregistered consumer channels.
-	ap.consumerMu.RLock()
-
-	for _, c := range ap.consumers {
-		// Require the update/destroy condition of the event to match
-		// the requested event type of the consumer.
-		if (update && c.WantUpdate()) || (!update && c.WantDestroy()) {
-			// Non-blocking send to the consumer's event channel.
-			select {
-			case c.events <- ae:
-				c.stats.setQueueLength(len(c.events))
-				c.stats.incrEventsReceived()
-			default:
-				// If the channel can't be written to immediately,
-				// increment the consumer's lost counter.
-				c.stats.incrEventsLost()
-			}
-		}
+	if ap.collection == nil {
+		panic("nil eBPF collection in probe")
 	}
 
-	ap.consumerMu.RUnlock()
+	// Set sane defaults on the configuration structure.
+	cfg.probeDefaults()
+
+	if err := probeConfigVerify(cfg); err != nil {
+		return errors.Wrap(err, "verifying probe configuration")
+	}
+
+	configMap, ok := ap.collection.Maps["config"]
+	if !ok {
+		return errors.New("map 'config' not found in eBPF collection")
+	}
+
+	curveMap, ok := ap.collection.Maps["config_ratecurve"]
+	if !ok {
+		return errors.New("map 'config_ratecurve' not found in eBPF collection")
+	}
+
+	if err := curveMap.Put(curve0Age, cfg.Curve0.Age.Nanoseconds()); err != nil {
+		return errors.Wrap(err, "Curve0Age in config_ratecurve")
+	}
+
+	if err := curveMap.Put(curve0Rate, cfg.Curve0.Rate.Nanoseconds()); err != nil {
+		return errors.Wrap(err, "Curve0Rate in config_ratecurve")
+	}
+
+	if err := curveMap.Put(curve1Age, cfg.Curve1.Age.Nanoseconds()); err != nil {
+		return errors.Wrap(err, "Curve1Age in config_ratecurve")
+	}
+
+	if err := curveMap.Put(curve1Rate, cfg.Curve1.Rate.Nanoseconds()); err != nil {
+		return errors.Wrap(err, "Curve1Rate in config_ratecurve")
+	}
+
+	if err := curveMap.Put(curve2Age, cfg.Curve2.Age.Nanoseconds()); err != nil {
+		return errors.Wrap(err, "Curve2Age in config_ratecurve")
+	}
+
+	if err := curveMap.Put(curve2Rate, cfg.Curve2.Rate.Nanoseconds()); err != nil {
+		return errors.Wrap(err, "Curve2Rate in config_ratecurve")
+	}
+
+	// XXX: Set capture all traffic
+	if err := configMap.Put(configCaptureAll, int64(1)); err != nil {
+		return errors.Wrap(err, "configCaptureAll in config")
+	}
+
+	// Set the ready bit in the probe's config map to make it start sending traffic.
+	if err := configMap.Put(configReady, readyValue); err != nil {
+		return errors.Wrap(err, "configReady in config")
+	}
+
+	return nil
 }

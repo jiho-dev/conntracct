@@ -30,8 +30,12 @@ func init() {
 
 const perfCtEventMap = "perf_conntrack_event"
 
+type EventHandler func(event *Event) bool
+
 // Probe is an instance of a BPF probe running in the kernel.
 type CtEventProbe struct {
+	Handler EventHandler
+
 	// cilium/ebpf resources.
 	collection    *ebpf.Collection
 	ctEventReader *perf.Reader
@@ -171,7 +175,7 @@ func (ap *CtEventProbe) disablePerfEvents() error {
 }
 
 // Start attaches the BPF program's kprobes and starts polling the perf ring buffer.
-func (ap *CtEventProbe) Start() error {
+func (ap *CtEventProbe) Start(useZeroCopy bool) error {
 
 	ap.startMu.Lock()
 	defer ap.startMu.Unlock()
@@ -211,7 +215,7 @@ func (ap *CtEventProbe) Start() error {
 	ap.ctEventReader = r
 
 	// Start event decoder/fanout workers.
-	go ap.ctEventWorker()
+	go ap.ctEventWorker(useZeroCopy)
 
 	ap.started = true
 
@@ -262,11 +266,23 @@ func (ap *CtEventProbe) trimTail(data []byte) []byte {
 // ctEventWorker reads binady flow update events from the Probe's ring buffer,
 // unmarshals the events into Event structures and sends them on all registered
 // consumers' event channels.
-func (ap *CtEventProbe) ctEventWorker() {
+func (ap *CtEventProbe) ctEventWorker(useZeroCopy bool) {
 	var rec perf.Record
+	_ = rec
+	var err error
+	var ae Event
 
 	for {
-		err := ap.ctEventReader.ReadExt(&rec)
+		ae.Start = 0
+		ae.Timestamp = 0
+		ae.FlowID = 0
+		ae.Connmark = 0
+
+		if useZeroCopy {
+			err = ap.ctEventReader.ZeroCopyRead(&rec)
+		} else {
+			rec, err = ap.ctEventReader.Read()
+		}
 		if err != nil {
 			// Reader closed, gracefully exit the read loop.
 			if perf.IsClosed(err) {
@@ -274,7 +290,7 @@ func (ap *CtEventProbe) ctEventWorker() {
 			}
 
 			fmt.Printf("unexpected error reading from ctEventReader:", err)
-			return
+			continue
 		}
 
 		// Log the amount of lost samples and skip processing the sample.
@@ -288,16 +304,19 @@ func (ap *CtEventProbe) ctEventWorker() {
 
 		//ap.stats.incrPerfEventsUpdate()
 
-		var ae Event
 		buf := ap.trimTail(rec.RawSample)
-		if err := ae.unmarshalBinary(buf); err != nil {
-			panic(err)
+		if err = ae.unmarshalBinary(buf); err != nil {
+			fmt.Printf("Err: %s \n", err)
 		}
 
-		// Done using the buffer
-		ap.ctEventReader.PutTail(rec.Ring)
+		if useZeroCopy {
+			// Done using the buffer
+			ap.ctEventReader.PutTail(rec.Ring)
+		}
 
-		fmt.Printf("%s \n", ae.String())
+		if ae.Start != 0 && ap.Handler != nil {
+			ap.Handler(&ae)
+		}
 	}
 }
 

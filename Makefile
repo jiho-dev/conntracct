@@ -6,7 +6,7 @@ export MAGEFILE_IGNOREDEFAULT=
 
 all: bin
 
-kernel: clean
+kernel: #clean
 	mage bpf:kernels
 
 bin:
@@ -19,6 +19,9 @@ run:
 
 prepare:
 	sudo ./setup-dev.sh
+
+kill:
+	 sudo killall -9 conntracct
 
 clean:
 	mage bpf:clean

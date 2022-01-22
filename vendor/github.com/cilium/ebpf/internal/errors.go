@@ -1,12 +1,11 @@
 package internal
 
 import (
-	"bytes"
+	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/cilium/ebpf/internal/unix"
-	"golang.org/x/xerrors"
 )
 
 // ErrorWithLog returns an error that includes logs from the
@@ -15,8 +14,8 @@ import (
 // logErr should be the error returned by the syscall that generated
 // the log. It is used to check for truncation of the output.
 func ErrorWithLog(err error, log []byte, logErr error) error {
-	logStr := strings.Trim(CString(log), "\t\r\n ")
-	if xerrors.Is(logErr, unix.ENOSPC) {
+	logStr := strings.Trim(unix.ByteSliceToString(log), "\t\r\n ")
+	if errors.Is(logErr, unix.ENOSPC) {
 		logStr += " (truncated...)"
 	}
 
@@ -29,19 +28,14 @@ type VerifierError struct {
 	log   string
 }
 
+func (le *VerifierError) Unwrap() error {
+	return le.cause
+}
+
 func (le *VerifierError) Error() string {
 	if le.log == "" {
 		return le.cause.Error()
 	}
 
 	return fmt.Sprintf("%s: %s", le.cause, le.log)
-}
-
-// CString turns a NUL / zero terminated byte buffer into a string.
-func CString(in []byte) string {
-	inLen := bytes.IndexByte(in, 0)
-	if inLen == -1 {
-		return ""
-	}
-	return string(in[:inLen])
 }

@@ -298,8 +298,9 @@ func (ap *Probe) Start() error {
 		ap.destroyReader = r
 	*/
 
+	useZeroCopy := false
 	// Start event decoder/fanout workers.
-	go ap.updateWorker()
+	go ap.updateWorker(useZeroCopy)
 
 	//go ap.destroyWorker()
 
@@ -362,19 +363,26 @@ func (ap *Probe) trimTail(data []byte) []byte {
 // updateWorker reads binady flow update events from the Probe's ring buffer,
 // unmarshals the events into Event structures and sends them on all registered
 // consumers' event channels.
-func (ap *Probe) updateWorker() {
+func (ap *Probe) updateWorker(useZeroCopy bool) {
 	var rec perf.Record
+	_ = rec
+	var err error
 
 	for {
-		//rec, err := ap.updateReader.Read()
-		// XXX
-		err := ap.updateReader.ReadExt(&rec)
+		if useZeroCopy {
+			err = ap.updateReader.ZeroCopyRead(&rec)
+		} else {
+			rec, err = ap.updateReader.Read()
+		}
+
 		if err != nil {
 			// Reader closed, gracefully exit the read loop.
 			if perf.IsClosed(err) {
 				return
 			}
-			panic(fmt.Sprint("unexpected error reading from updateReader:", err))
+			//panic(fmt.Sprint("unexpected error reading from updateReader:", err))
+			fmt.Printf("unexpected error reading from updateReader: %s \n", err)
+			continue
 		}
 
 		// Log the amount of lost samples and skip processing the sample.
@@ -383,6 +391,9 @@ func (ap *Probe) updateWorker() {
 			// XXX
 			ap.updateReader.PutTail(rec.Ring)
 			continue
+		} else if len(rec.RawSample) < 1 {
+			fmt.Printf("no data\n")
+			continue
 		}
 
 		ap.stats.incrPerfEventsUpdate()
@@ -390,11 +401,13 @@ func (ap *Probe) updateWorker() {
 		var ae Event
 		buf := ap.trimTail(rec.RawSample)
 		if err := ae.unmarshalBinary(buf); err != nil {
-			panic(err)
+			fmt.Printf("Err: %s \n", err)
+			continue
 		}
 
-		// XXX
-		ap.updateReader.PutTail(rec.Ring)
+		if useZeroCopy {
+			ap.updateReader.PutTail(rec.Ring)
+		}
 
 		// Fan out update event to all registered consumers.
 		ap.fanoutEvent(ae, true)

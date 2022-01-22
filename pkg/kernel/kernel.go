@@ -49,6 +49,7 @@ type Probes []Probe
 type Kernel struct {
 	Version     string
 	URL         string
+	KernelFile  string
 	ConfigFile  string
 	Params      Params
 	Probes      Probes
@@ -72,11 +73,28 @@ func (k Kernel) Name() string {
 
 // Directory returns the path on disk where the kernel is extracted.
 func (k Kernel) Directory() string {
-	return path.Join(buildDir, k.Name())
+	p := path.Join(buildDir, k.Name())
+
+	if k.KernelFile != "" {
+		kPath := trimExt(k.KernelFile)
+		p = path.Join(p, kPath)
+	}
+
+	return p
+}
+
+func (k Kernel) PackageDir() string {
+	p := path.Join(buildDir, k.Name())
+
+	return p
 }
 
 func (k Kernel) IsLinux3() bool {
 	return strings.HasPrefix(k.Version, "3.")
+}
+
+func (k Kernel) GetExt() string {
+	return path.Ext(k.ArchivePath())
 }
 
 // Fetch ensures that a given kernel is downloaded and extracted to the temp directory.
@@ -100,8 +118,20 @@ func (k Kernel) Fetch() error {
 			return err
 		}
 
-		if err := unarchive(k.ArchivePath(), buildDir, k.Directory()); err != nil {
-			return err
+		ext := k.GetExt()
+		if ext == ".rpm" {
+			if err := UnPackRPM(k.ArchivePath(), k.PackageDir(), k.Directory(), k.KernelFile); err != nil {
+				return err
+			}
+
+		} else if ext == ".deb" {
+			if err := UnPackDebian(k.ArchivePath(), k.PackageDir(), k.Directory(), k.KernelFile); err != nil {
+				return err
+			}
+		} else {
+			if err := unarchive(k.ArchivePath(), buildDir, k.Directory()); err != nil {
+				return err
+			}
 		}
 
 	} else if u.Scheme == "file" {

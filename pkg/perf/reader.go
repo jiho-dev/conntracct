@@ -62,6 +62,38 @@ func readRecordFromRing(ring *perfEventRing) (Record, error) {
 	return readRecord(ring, ring.cpu)
 }
 
+func zeroCopyReadRecordFromRing(ring *perfEventRing, rec *Record) error {
+	var header perfEventHeader
+	err := binary.Read(ring, utils.NativeEndian, &header)
+	if err == io.EOF {
+		return errEOR
+	} else if err != nil {
+		return fmt.Errorf("can't read event header: %v", err)
+	}
+
+	switch header.Type {
+	case utils.PERF_RECORD_LOST:
+		lost, err := readLostRecords(ring)
+		rec.CPU = ring.cpu
+		rec.LostSamples = lost
+		return err
+
+	case utils.PERF_RECORD_SAMPLE:
+		// This must match 'struct perf_event_sample in kernel sources.
+		var size uint32
+		if err := binary.Read(ring, utils.NativeEndian, &size); err != nil {
+			return fmt.Errorf("can't read sample size: %v", err)
+		}
+
+		rec.CPU = ring.cpu
+		rec.RawSample, err = ring.ZeroCopyReadRing(int(size))
+		return err
+
+	default:
+		return &unknownEventError{header.Type}
+	}
+}
+
 func readRecord(rd io.Reader, cpu int) (Record, error) {
 	var header perfEventHeader
 	err := binary.Read(rd, utils.NativeEndian, &header)
@@ -115,48 +147,6 @@ func readRawSample(rd io.Reader) ([]byte, error) {
 	}
 	return data, nil
 }
-
-///////////////////////
-
-func readRecordFromRingExt(ring *perfEventRing, rec *Record) error {
-	var header perfEventHeader
-	err := binary.Read(ring, utils.NativeEndian, &header)
-	if err == io.EOF {
-		return errEOR
-	} else if err != nil {
-		return fmt.Errorf("can't read event header: %v", err)
-	}
-
-	switch header.Type {
-	case utils.PERF_RECORD_LOST:
-		lost, err := readLostRecords(ring)
-		rec.CPU = ring.cpu
-		rec.LostSamples = lost
-		return err
-
-	case utils.PERF_RECORD_SAMPLE:
-		// This must match 'struct perf_event_sample in kernel sources.
-		var size uint32
-		if err := binary.Read(ring, utils.NativeEndian, &size); err != nil {
-			return fmt.Errorf("can't read sample size: %v", err)
-		}
-
-		data, err := ring.GetFirstData(int(size))
-		rec.CPU = ring.cpu
-		rec.RawSample = data
-		if len(data) < int(size) && err == io.EOF {
-			err = errEOR
-		} else {
-			err = nil
-		}
-		return err
-
-	default:
-		return &unknownEventError{header.Type}
-	}
-}
-
-////////////////////
 
 // Reader allows reading bpf_perf_event_output
 // from user space.
@@ -358,7 +348,7 @@ func (pr *Reader) Read() (Record, error) {
 }
 
 // Calling Close interrupts the function.
-func (pr *Reader) ReadExt(rec *Record) error {
+func (pr *Reader) ZeroCopyRead(rec *Record) error {
 	pr.mu.Lock()
 	defer pr.mu.Unlock()
 
@@ -396,7 +386,7 @@ func (pr *Reader) ReadExt(rec *Record) error {
 		// Start at the last available event. The order in which we
 		// process them doesn't matter, and starting at the back allows
 		// resizing epollRings to keep track of processed rings.
-		err := readRecordFromRingExt(ring, rec)
+		err := zeroCopyReadRecordFromRing(ring, rec)
 		if err == errEOR {
 			// We've emptied the current ring buffer, process
 			// the next one.

@@ -1,7 +1,7 @@
 #include <linux/kconfig.h>
 #include "bpf_helpers.h"
 
-#define KBUILD_MODNAME "ct_event"
+#define KBUILD_MODNAME "conntrack_event"
 //#define _LINUX_BLKDEV_H // calls macros that contain inline asm, which BPF doesn't support
 #include <net/netfilter/nf_conntrack.h>
 #include <net/netfilter/nf_conntrack_acct.h>
@@ -403,8 +403,10 @@ static __always_inline u64 flow_sample_update(int ev_type, struct nf_conn *ct, u
     // and the lower the update frequency. The age thresholds and update intervals
     // can be configured through the 'config_ratecurve' map.
     u64 pkts_total = (data.packets_orig + data.packets_ret);
+    /*
     if (pkts_total > 1 && !flow_cooldown_expired(ct, ts))
         return 0;
+    */
 
     // Store a reference timestamp ('origin') to allow future event cycles to
     // determine the age of the flow. This is write-once and will only store
@@ -415,8 +417,10 @@ static __always_inline u64 flow_sample_update(int ev_type, struct nf_conn *ct, u
     // based on the age of the flow. flow_set_cooldown returns negative if
     // the event should be dropped due to the flow being too young or
     // because of an internal curve lookup error.
+    /*
     if (flow_set_cooldown(ct, ts) < 0)
         return 0;
+    */
 
     // Extract proto, src/dst address and ports.
     extract_tuple(&data, ct);

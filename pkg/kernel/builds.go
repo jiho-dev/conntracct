@@ -17,20 +17,12 @@ var Builds = map[string]Kernel{
 		},
 	*/
 
-	//////////////////////////
-	// CentOS 8.3(8.5) kernel
-	"4.18.0": {
-		Version:     "4.18.0",
-		URL:         "file://pkg/kernel/source/linux-4.18.0-348.7.1.el8_5.tar.xz",
-		ConfigFile:  "/pkg/kernel/source/config-4.18.0-348.7.1.el8_5.x86_64",
-		BuildParams: []string{},
-		Probes:      kprobes["acct_v1"],
-	},
-
 	// CentOS 7.3 kernel
 	"3.10.0": {
-		Version:    "3.10.0",
-		URL:        "file://pkg/kernel/source/linux-3.10.0-1127.el7.tar.xz",
+		Version: "3.10.0",
+		//URL:        "file://pkg/kernel/source/linux-3.10.0-1127.el7.tar.xz",
+		URL:        "https://buildlogs.centos.org/c7.2003.00.x86_64/kernel/20200331233310/3.10.0-1127.el7.x86_64/kernel-3.10.0-1127.el7.src.rpm",
+		KernelFile: "linux-3.10.0-1127.el7.tar.xz",
 		ConfigFile: "/pkg/kernel/source/config-3.10.0-1127.el7.x86_64",
 		BuildParams: []string{
 			"-D_LINUX_3_10",
@@ -39,10 +31,26 @@ var Builds = map[string]Kernel{
 		Probes: kprobes["acct_v1"],
 	},
 
+	// CentOS 8.3(8.5) kernel
+	"4.18.0": {
+		Version: "4.18.0",
+		//URL:     "file://pkg/kernel/source/linux-4.18.0-348.7.1.el8_5.tar.xz",
+		//URL:         "https://vault.centos.org/8.3.2011/BaseOS/Source/SPackages/kernel-4.18.0-240.22.1.el8_3.src.rpm",
+		//KernelFile:  "linux-4.18.0-240.22.1.el8_3.tar.xz",
+
+		URL:         "https://vault.centos.org/8.5.2111/BaseOS/Source/SPackages/kernel-4.18.0-348.7.1.el8_5.src.rpm",
+		KernelFile:  "linux-4.18.0-348.7.1.el8_5.tar.xz",
+		ConfigFile:  "/pkg/kernel/source/config-4.18.0-348.7.1.el8_5.x86_64",
+		BuildParams: []string{},
+		Probes:      kprobes["acct_v1"],
+	},
+
 	// Ubuntu 20.04 LTS
 	"5.4.0": {
-		Version:     "5.4.0",
-		URL:         "file://pkg/kernel/source/linux-source-5.4.0.tar.bz2",
+		Version: "5.4.0",
+		//URL:        "file://pkg/kernel/source/linux-source-5.4.0.tar.bz2",
+		URL:         "http://archive.ubuntu.com/ubuntu/pool/main/l/linux/linux-source-5.4.0_5.4.0-84.94_all.deb",
+		KernelFile:  "linux-source-5.4.0.tar.bz2",
 		ConfigFile:  "/pkg/kernel/source/config-5.4.0-84-generic",
 		BuildParams: []string{},
 		Probes:      kprobes["acct_v1"],

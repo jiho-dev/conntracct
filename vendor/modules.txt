@@ -1,12 +1,14 @@
+# github.com/DataDog/zstd v1.4.5
+github.com/DataDog/zstd
 # github.com/blang/semver v3.5.1+incompatible
 github.com/blang/semver
-# github.com/cilium/ebpf v0.0.0-20200319110858-a7172c01168f
+# github.com/cilium/ebpf v0.7.1-0.20220117151200-4eed1751a48d
 github.com/cilium/ebpf
 github.com/cilium/ebpf/asm
 github.com/cilium/ebpf/internal
 github.com/cilium/ebpf/internal/btf
+github.com/cilium/ebpf/internal/sys
 github.com/cilium/ebpf/internal/unix
-github.com/cilium/ebpf/perf
 # github.com/davecgh/go-spew v1.1.1
 github.com/davecgh/go-spew/spew
 # github.com/fsnotify/fsnotify v1.4.7
@@ -41,6 +43,12 @@ github.com/influxdata/platform/pkg/escape
 github.com/jsimonetti/rtnetlink
 github.com/jsimonetti/rtnetlink/internal/unix
 github.com/jsimonetti/rtnetlink/rtnl
+# github.com/klauspost/compress v1.11.7
+github.com/klauspost/compress/fse
+github.com/klauspost/compress/huff0
+github.com/klauspost/compress/snappy
+github.com/klauspost/compress/zstd
+github.com/klauspost/compress/zstd/internal/xxhash
 # github.com/koneu/natend v0.0.0-20150829182554-ec0926ea948d
 github.com/koneu/natend
 # github.com/konsorten/go-windows-terminal-sequences v1.0.1
@@ -78,6 +86,10 @@ github.com/pkg/errors
 github.com/pmezard/go-difflib/difflib
 # github.com/rakyll/statik v0.1.6
 github.com/rakyll/statik/fs
+# github.com/sassoftware/go-rpmutils v0.2.0
+github.com/sassoftware/go-rpmutils
+github.com/sassoftware/go-rpmutils/cpio
+github.com/sassoftware/go-rpmutils/fileutil
 # github.com/sirupsen/logrus v1.4.0
 github.com/sirupsen/logrus
 # github.com/spf13/afero v1.1.2
@@ -93,30 +105,45 @@ github.com/spf13/jwalterweatherman
 github.com/spf13/pflag
 # github.com/spf13/viper v1.3.2
 github.com/spf13/viper
-# github.com/stretchr/testify v1.2.2
+# github.com/stretchr/testify v1.7.0
 github.com/stretchr/testify/assert
 github.com/stretchr/testify/require
 # github.com/ti-mo/kconfig v0.0.0-20181208153747-0708bf82969f
 github.com/ti-mo/kconfig
+# github.com/ulikunitz/xz v0.5.9
+github.com/ulikunitz/xz/internal/hash
+github.com/ulikunitz/xz/internal/xlog
+github.com/ulikunitz/xz/lzma
 # github.com/vishvananda/netns v0.0.0-20191106174202-0a2b9b5464df
 github.com/vishvananda/netns
-# golang.org/x/crypto v0.0.0-20190308221718-c2843e01d9a2
+# github.com/xi2/xz v0.0.0-20171230120015-48954b6210f8
+github.com/xi2/xz
+# golang.org/x/crypto v0.0.0-20201221181555-eec23a3978ad
+golang.org/x/crypto/cast5
+golang.org/x/crypto/openpgp
+golang.org/x/crypto/openpgp/armor
+golang.org/x/crypto/openpgp/elgamal
+golang.org/x/crypto/openpgp/errors
+golang.org/x/crypto/openpgp/packet
+golang.org/x/crypto/openpgp/s2k
 golang.org/x/crypto/ssh/terminal
 # golang.org/x/net v0.0.0-20191028085509-fe3aa8a45271
 golang.org/x/net/bpf
-# golang.org/x/sync v0.0.0-20190227155943-e225da77a7e6
+# golang.org/x/sync v0.0.0-20190423024810-112230192c58
 golang.org/x/sync/errgroup
-# golang.org/x/sys v0.0.0-20210816074244-15123e1e1f71
+# golang.org/x/sys v0.0.0-20210906170528-6f6e22806c34
 golang.org/x/sys/internal/unsafeheader
+golang.org/x/sys/plan9
 golang.org/x/sys/unix
 golang.org/x/sys/windows
+# golang.org/x/term v0.0.0-20201117132131-f5c789dd3221
+golang.org/x/term
 # golang.org/x/text v0.3.2
 golang.org/x/text/transform
 golang.org/x/text/unicode/norm
-# golang.org/x/xerrors v0.0.0-20191204190536-9bdfabe68543
-golang.org/x/xerrors
-golang.org/x/xerrors/internal
 # gopkg.in/yaml.v2 v2.2.2
 gopkg.in/yaml.v2
+# gopkg.in/yaml.v3 v3.0.0-20200313102051-9f266ea9e77c
+gopkg.in/yaml.v3
 # lukechampine.com/blake3 v0.4.0
 lukechampine.com/blake3

@@ -161,7 +161,7 @@ func (rr *ringReader) Read(p []byte) (int, error) {
 	return n, nil
 }
 
-func (rr *ringReader) GetFirstData(n int) ([]byte, error) {
+func (rr *ringReader) getTailRingBuffer(n int) ([]byte, error) {
 	start := int(rr.tail & rr.mask)
 
 	// Truncate if the read wraps in the ring buffer
@@ -182,4 +182,42 @@ func (rr *ringReader) GetFirstData(n int) ([]byte, error) {
 	}
 
 	return b, nil
+}
+
+func (rr *ringReader) ZeroCopyReadRing(size int) ([]byte, error) {
+	var nTotal int = 0
+	var err error
+	var chunk [][]byte
+
+	for nTotal < size && err == nil {
+		data, err := rr.getTailRingBuffer(size - nTotal)
+
+		r := len(data)
+		if r > 0 {
+			chunk = append(chunk, data)
+			nTotal += r
+		}
+
+		if nTotal < size && err == io.EOF {
+			err = errEOR
+		} else {
+			err = nil
+		}
+	}
+
+	// if data chunk
+	// copy them to single buffer
+	if len(chunk) > 1 {
+		data := make([]byte, nTotal)
+
+		var l int
+		for _, c := range chunk {
+			copy(data[l:], c)
+			l += len(c)
+		}
+
+		return data, err
+	}
+
+	return chunk[0], err
 }

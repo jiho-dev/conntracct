@@ -105,7 +105,7 @@ func (e *Event) unmarshalBinary(b []byte) error {
 	e.EventType = b[121]
 
 	// Generate and set the Event's FlowID.
-	e.FlowID = e.hashFlow()
+	//e.FlowID = e.hashFlow()
 
 	return nil
 }

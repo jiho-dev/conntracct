@@ -4,7 +4,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io/ioutil"
-	"net"
 	"strconv"
 	"strings"
 	"sync"
@@ -23,89 +22,62 @@ var hashPool = sync.Pool{
 
 // EventLength is the length of the struct sent by BPF.
 // power of 8
-const EventLength = 128
+const EventLength = 96
 
-// Event is an accounting event delivered to userspace from the Probe.
+var btime int64 = systemStart()
+
+type IPv4Addr uint32
+
+// 12 * uint64: 96 bytes
+type CtEvent struct {
+	Start       uint64 // epoch timestamp of flow start
+	Stop        uint64
+	Timestamp   uint64 // ktime of event, relative to machine boot time
+	ConnPtr     uint64
+	PacketsOrig uint64
+	BytesOrig   uint64
+	PacketsRet  uint64
+	BytesRet    uint64
+	SrcAddr     IPv4Addr
+	DstAddr     IPv4Addr
+	NatAddr     IPv4Addr
+	Connmark    uint32
+	NetNS       uint32
+	SrcPort     uint16
+	DstPort     uint16
+	NatPort     uint16
+	Zone        uint16
+	Proto       uint8
+	EventType   uint8
+	TcpState    uint8
+	Padding     uint8
+}
+
 type Event struct {
-	Start       uint64 `json:"start"`     // epoch timestamp of flow start
-	Timestamp   uint64 `json:"timestamp"` // ktime of event, relative to machine boot time
-	FlowID      uint32 `json:"flow_id"`
-	Connmark    uint32 `json:"connmark"`
-	SrcAddr     net.IP `json:"src_addr"`
-	DstAddr     net.IP `json:"dst_addr"`
-	NatAddr     net.IP `json:"nat_addr"`
-	PacketsOrig uint64 `json:"packets_orig"`
-	BytesOrig   uint64 `json:"bytes_orig"`
-	PacketsRet  uint64 `json:"packets_ret"`
-	BytesRet    uint64 `json:"bytes_ret"`
-	SrcPort     uint16 `json:"src_port"`
-	DstPort     uint16 `json:"dst_port"`
-	NatPort     uint16 `json:"nat_port"`
-	NetNS       uint32 `json:"netns"`
-	Zone        uint16 `json:"zone"`
-	Proto       uint8  `json:"proto"`
-	EventType   uint8  `json:"event_type"`
+	CtEvent
 
-	connPtr uint64
+	FlowID uint32
 }
 
 var EventTypeString = []string{"None", "Add", "Update", "Delete"}
 
-// unmarshalBinary unmarshals a slice of bytes received from the
-// kernel's eBPF perf map into a struct using the machine's native endianness.
 func (e *Event) unmarshalBinary(b []byte) error {
-
 	if len(b) != EventLength {
 		return fmt.Errorf("input byte array incorrect length %d (expected %d)", len(b), EventLength)
 	}
 
-	e.Start = *(*uint64)(unsafe.Pointer(&b[0]))
-	e.Timestamp = *(*uint64)(unsafe.Pointer(&b[8]))
-	e.connPtr = *(*uint64)(unsafe.Pointer(&b[16]))
+	e.CtEvent = *(*CtEvent)(unsafe.Pointer(&b[0]))
 
-	// Build an IPv4 address if only the first four bytes
-	// of the nf_inet_addr union are filled.
-	// Assigning 4 bytes directly into IP() is incorrect,
-	// an IPv4 is stored in the last 4 bytes of an IP().
-	if isIPv4(b[24:40]) {
-		e.SrcAddr = net.IPv4(b[24], b[25], b[26], b[27])
-	} else {
-		e.SrcAddr = net.IP(b[24:40])
-	}
+	e.SrcAddr = ntohl(e.SrcAddr)
+	e.DstAddr = ntohl(e.DstAddr)
+	e.NatAddr = ntohl(e.NatAddr)
 
-	if isIPv4(b[40:56]) {
-		e.DstAddr = net.IPv4(b[40], b[41], b[42], b[43])
-	} else {
-		e.DstAddr = net.IP(b[40:56])
-	}
-
-	if isIPv4(b[56:72]) {
-		e.NatAddr = net.IPv4(b[56], b[57], b[58], b[59])
-	} else {
-		e.NatAddr = net.IP(b[56:72])
-	}
-
-	e.PacketsOrig = *(*uint64)(unsafe.Pointer(&b[72]))
-	e.BytesOrig = *(*uint64)(unsafe.Pointer(&b[80]))
-	e.PacketsRet = *(*uint64)(unsafe.Pointer(&b[88]))
-	e.BytesRet = *(*uint64)(unsafe.Pointer(&b[96]))
-
-	e.Connmark = *(*uint32)(unsafe.Pointer(&b[104]))
-	e.NetNS = *(*uint32)(unsafe.Pointer(&b[108]))
-
-	// Only extract ports for UDP and TCP.
-	e.Proto = b[120]
-	if e.Proto == 6 || e.Proto == 17 {
-		e.SrcPort = binary.BigEndian.Uint16(b[112:114])
-		e.DstPort = binary.BigEndian.Uint16(b[114:116])
-		e.NatPort = binary.BigEndian.Uint16(b[116:118])
-	}
-	//e.Zone = binary.BigEndian.Uint16(b[118:120])
-	e.Zone = *(*uint16)(unsafe.Pointer(&b[118]))
-	e.EventType = b[121]
+	e.SrcPort = ntohs(e.SrcPort)
+	e.DstPort = ntohs(e.DstPort)
+	e.NatPort = ntohs(e.NatPort)
 
 	// Generate and set the Event's FlowID.
-	//e.FlowID = e.hashFlow()
+	e.FlowID = e.hashFlow()
 
 	return nil
 }
@@ -118,12 +90,14 @@ func (e *Event) hashFlow() uint32 {
 	h := hashPool.Get().(*blake3.Hasher)
 
 	// Source/Destination Address.
-	_, _ = h.Write(e.SrcAddr)
-	_, _ = h.Write(e.DstAddr)
-
-	b := make([]byte, 2)
+	b := make([]byte, 4)
+	binary.BigEndian.PutUint32(b, uint32(e.SrcAddr))
+	_, _ = h.Write(b)
+	binary.BigEndian.PutUint32(b, uint32(e.DstAddr))
+	_, _ = h.Write(b)
 
 	// Source Port.
+	b = make([]byte, 2)
 	binary.BigEndian.PutUint16(b, e.SrcPort)
 	_, _ = h.Write(b)
 
@@ -136,7 +110,7 @@ func (e *Event) hashFlow() uint32 {
 
 	// nf_conn struct kernel pointer.
 	b = make([]byte, 8)
-	binary.LittleEndian.PutUint64(b, e.connPtr)
+	binary.LittleEndian.PutUint64(b, e.ConnPtr)
 	_, _ = h.Write(b)
 
 	// Calculate the hash.
@@ -174,8 +148,6 @@ func systemStart() int64 {
 	return 0
 }
 
-var btime int64 = systemStart()
-
 /*
 func jiffiesToTime(jiffies int64) time.Time {
 	ticks, _ := sysconf.Sysconf(sysconf.SC_CLK_TCK)
@@ -194,7 +166,39 @@ func (e *Event) String() string {
 	ts := time.Unix(btime, 0)
 	ts = ts.Add(time.Duration(e.Timestamp))
 
-	return fmt.Sprintf("%s: %s(%s): %+v", EventTypeString[e.EventType], s, ts, *e)
+	src := e.SrcAddr.String()
+	dst := e.DstAddr.String()
+	nat := e.NatAddr.String()
+
+	return fmt.Sprintf("%s: %s, src=%s, dst=%s, nat=%s: %+v",
+		EventTypeString[e.EventType], s,
+		//ts,
+		src, dst, nat,
+		*e)
+}
+
+func (ipv4 *IPv4Addr) String() string {
+	ipstr := fmt.Sprintf("%d.%d.%d.%d",
+		*ipv4>>24,
+		(*ipv4&0x00FFFFFF)>>16,
+		(*ipv4&0x0000FFFF)>>8,
+		*ipv4&0x000000FF)
+
+	return ipstr
+}
+
+func ntohs(v uint16) uint16 {
+	v1 := (v&0xFF)<<8 | (v&0xFF00)>>8
+	return v1
+}
+
+func ntohl(v IPv4Addr) IPv4Addr {
+	v1 := (v&0xFF)<<24 |
+		(v&0xFF00)<<8 |
+		(v&0xFF0000)>>8 |
+		(v&0xFF000000)>>24
+
+	return v1
 }
 
 // isIPv4 checks if everything but the first 4 bytes of a bytearray

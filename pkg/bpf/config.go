@@ -41,6 +41,7 @@ type configOffset uint32
 const (
 	configReady configOffset = iota
 	configCaptureAll
+	configCoolDown
 )
 
 // curveOffset represents an offset in the probe's `curve` BPF array.

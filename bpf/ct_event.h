@@ -1,18 +1,19 @@
 #ifndef __CT_EVENT_H__
 #define __CT_EVENT_H__
 
-// 128 bytes
+// 12 * u64: 96 bytes
 struct ct_event_s {
     u64 start;
+    u64 stop;
     u64 ts;
     u64 cptr;
-    union nf_inet_addr srcaddr;
-    union nf_inet_addr dstaddr;
-    union nf_inet_addr nataddr;
     u64 packets_orig;
     u64 bytes_orig;
     u64 packets_ret;
     u64 bytes_ret;
+    u32 srcaddr;
+    u32 dstaddr;
+    u32 nataddr;
     u32 connmark;
     u32 netns;
     u16 srcport;
@@ -21,12 +22,14 @@ struct ct_event_s {
     u16 zone;
     u8 proto;
     u8 event_type;
-    u8 padding[6];
+    u8 tcp_state;
+    u8 padding[1];
 };
 
 enum ct_event_config {
     ConfigReady,
     ConfigCaptureAll,
+    ConfigCoolDown, // 0: off, > 1: on
     ConfigMax,
 };
 

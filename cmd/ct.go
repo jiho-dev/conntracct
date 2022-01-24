@@ -35,12 +35,13 @@ func ReceiveEvent(event *bpf.Event) bool {
 	perCnt := 1000
 
 	evCount++
-
 	if event != nil && (evCount%perCnt) == 1 {
 		//s := time.Now().Format("2006-01-02 15:04:05")
 		//fmt.Println(s) // 2019-01-12 10:20:30
 		log.Printf("idx=%d %+v", evCount, event.String())
 	}
+
+	log.Printf("idx=%d %+v", evCount, event.String())
 
 	return true
 }

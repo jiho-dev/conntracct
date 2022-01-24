@@ -373,6 +373,10 @@ func (ap *CtEventProbe) configure(cfg Config) error {
 		return errors.Wrap(err, "configCaptureAll in config")
 	}
 
+	if err := configMap.Put(configCoolDown, int64(1)); err != nil {
+		return errors.Wrap(err, "configCaptureAll in config")
+	}
+
 	// Set the ready bit in the probe's config map to make it start sending traffic.
 	if err := configMap.Put(configReady, readyValue); err != nil {
 		return errors.Wrap(err, "configReady in config")

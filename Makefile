@@ -10,12 +10,12 @@ kernel: #clean
 	mage bpf:kernels
 
 bin:
-#	rm -f ~/src/conntracct/build/bpf/acct/*
-#	mage bpf:build
+	rm -f ~/src/conntracct/build/bpf/acct/*
+	mage bpf:build
 	mage build
 
 run:
-	sudo ~/src/conntracct/build/conntracct run
+	sudo ~/src/conntracct/build/conntracct ct
 
 prepare:
 	sudo ./setup-dev.sh

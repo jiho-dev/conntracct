@@ -373,7 +373,7 @@ func (ap *CtEventProbe) configure(cfg Config) error {
 		return errors.Wrap(err, "configCaptureAll in config")
 	}
 
-	if err := configMap.Put(configCoolDown, int64(1)); err != nil {
+	if err := configMap.Put(configCoolDown, int64(0)); err != nil {
 		return errors.Wrap(err, "configCaptureAll in config")
 	}
 

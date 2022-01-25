@@ -7,6 +7,7 @@
 #include <net/netfilter/nf_conntrack_acct.h>
 #include <net/netfilter/nf_conntrack_timestamp.h>
 #include <net/netfilter/nf_conntrack_labels.h>
+#include <uapi/linux/in.h>
 
 #include "ct_event.h"
 
@@ -196,6 +197,12 @@ static __always_inline void extract_tuple(struct ct_event_s *data, struct nf_con
     data->srcport = tuplehash[IP_CT_DIR_ORIGINAL].tuple.src.u.all;
     data->dstport = tuplehash[IP_CT_DIR_ORIGINAL].tuple.dst.u.all;
     data->natport = tuplehash[IP_CT_DIR_REPLY].tuple.dst.u.all;
+
+    if (data->proto == IPPROTO_TCP) {
+        bpf_probe_read(&data->tcp_state, sizeof(data->tcp_state), &ct->proto.tcp.state);
+    } else {
+        data->tcp_state = 0;
+    }
 }
 
 // extract_netns extracts the nf_conn's network namespace inode number into an ct_event_s.

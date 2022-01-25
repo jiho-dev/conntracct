@@ -59,7 +59,83 @@ type Event struct {
 	FlowID uint32
 }
 
-var EventTypeString = []string{"None", "Add", "Update", "Delete"}
+//////////////////////
+
+const (
+	EventTypeNone uint8 = iota
+	EventTypeAdd
+	EventTypeUpdate
+	EventTypeDelete
+)
+
+var eventTypeString = map[uint8]string{
+	EventTypeNone:   "None",
+	EventTypeAdd:    "Add",
+	EventTypeUpdate: "Update",
+	EventTypeDelete: "Delete",
+}
+
+const (
+	TcpCtNone uint8 = iota
+	TcpCtSynSend
+	TcpCtSynRecv
+	TcpCtEstablish
+	TcpCtFinWait
+	TcpCtCloseWait
+	TcpCtLastAck
+	TcpCtTimeWait
+	TcpCtClose
+	TcpCtSyncSent2
+)
+
+var tcpStateString = map[uint8]string{
+	TcpCtNone:      "NONE",
+	TcpCtSynSend:   "SYN_SENT",
+	TcpCtSynRecv:   "SYN_RECV",
+	TcpCtEstablish: "ESTABLISHED",
+	TcpCtFinWait:   "FIN_WAIT",
+	TcpCtCloseWait: "CLOSE_WAIT",
+	TcpCtLastAck:   "LAST_ACK",
+	TcpCtTimeWait:  "TIME_WAIT",
+	TcpCtClose:     "CLOSE",
+	TcpCtSyncSent2: "SYN_SENT2",
+}
+
+var protoString = map[uint8]string{
+	1:   "icmp",
+	2:   "igmp",
+	6:   "tcp",
+	17:  "udp",
+	33:  "dccp",
+	47:  "gre",
+	58:  "ipv6-icmp",
+	94:  "ipip",
+	115: "l2tp",
+	132: "sctp",
+	136: "udplite",
+}
+
+func getString(p uint8, s map[uint8]string) string {
+	if val, ok := s[p]; ok {
+		return val
+	}
+
+	return strconv.FormatUint(uint64(p), 10)
+}
+
+func GetProtocolString(p uint8) string {
+	return getString(p, protoString)
+}
+
+func GetTcpStateString(p uint8) string {
+	return getString(p, tcpStateString)
+}
+
+func GetEventTypeString(p uint8) string {
+	return getString(p, eventTypeString)
+}
+
+////////////////////////////
 
 func (e *Event) unmarshalBinary(b []byte) error {
 	if len(b) != EventLength {
@@ -171,7 +247,7 @@ func (e *Event) String() string {
 	nat := e.NatAddr.String()
 
 	return fmt.Sprintf("%s: %s, src=%s, dst=%s, nat=%s: %+v",
-		EventTypeString[e.EventType], s,
+		GetEventTypeString(e.EventType), s,
 		//ts,
 		src, dst, nat,
 		*e)

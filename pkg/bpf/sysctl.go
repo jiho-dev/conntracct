@@ -1,6 +1,6 @@
 package bpf
 
-import "github.com/ti-mo/conntracct/internal/sysctl"
+import "github.com/ti-mo/conntracct/pkg/sysctl"
 
 // Sysctls applies a list of sysctls on the machine.
 // When verbose is true, logs any changes made to stdout.

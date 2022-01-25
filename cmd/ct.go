@@ -32,16 +32,19 @@ func init() {
 }
 
 func ReceiveEvent(event *bpf.Event) bool {
-	perCnt := 1000
-
 	evCount++
-	if event != nil && (evCount%perCnt) == 1 {
-		//s := time.Now().Format("2006-01-02 15:04:05")
-		//fmt.Println(s) // 2019-01-12 10:20:30
+
+	if false {
+		perCnt := 1000
+		if event != nil && (evCount%perCnt) == 1 {
+			//s := time.Now().Format("2006-01-02 15:04:05")
+			//fmt.Println(s) // 2019-01-12 10:20:30
+			log.Printf("idx=%d %+v", evCount, event.String())
+		}
+	} else {
+
 		log.Printf("idx=%d %+v", evCount, event.String())
 	}
-
-	log.Printf("idx=%d %+v", evCount, event.String())
 
 	return true
 }
@@ -92,6 +95,10 @@ func ctCmdRun(cmd *cobra.Command, args []string) error {
 	}
 
 	log.Printf("Started accounting probe and workers")
+
+	if err := config.Init(); err != nil {
+		return errors.Wrap(err, "apply system configuration")
+	}
 
 	// Wait for program to be interrupted.
 	sig := make(chan os.Signal, 1)
